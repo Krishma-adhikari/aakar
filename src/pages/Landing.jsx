@@ -3,20 +3,43 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight, ArrowUpRight, BadgeCheck, Bell, CalendarDays, CheckCircle2, FileCheck2, Globe2, Lightbulb, MapPin,
   MessageCircle, Play, Quote, Rocket, Send, ShieldCheck, Sparkles, Star, UserPlus, Users, Wrench, TrendingUp, GraduationCap,
+  Menu, X,
 } from 'lucide-react'
 import { Avatar, Logo, Pagoda, ROLES, Skyline, Stupa, ThemeToggle, money } from '../components/ui'
 import { startups, mentors, sessions } from '../data/demo'
+import IntroAnimation from '../components/IntroAnimation'
 
 function Nav() {
   const [scrolled, setScrolled] = useState(false)
+  const [open, setOpen] = useState(false)
   useEffect(() => {
     const f = () => setScrolled(window.scrollY > 10)
     f()
     window.addEventListener('scroll', f, { passive: true })
     return () => window.removeEventListener('scroll', f)
   }, [])
+  const close = () => setOpen(false)
   return (
     <header className={`nav ${scrolled ? 'scrolled' : ''}`}>
+      <style>{`
+        #how { scroll-margin-top: 100px; }
+        .nav .nav-burger { display: none; }
+        .nav .nav-menu { display: none; }
+        @media (max-width: 900px) {
+          .nav .nav-burger { display: inline-grid; }
+          .nav .nav-menu {
+            display: flex; flex-direction: column; gap: 4px;
+            position: absolute; left: 0; right: 0; top: 100%;
+            background: var(--card); border-bottom: 1px solid var(--line);
+            box-shadow: var(--shadow); padding: 12px 16px 18px;
+          }
+          .nav .nav-menu a {
+            display: block; padding: 13px 14px; border-radius: 12px;
+            font-weight: 600; font-size: 15px; color: var(--ink-2);
+          }
+          .nav .nav-menu a:hover { background: var(--primary-50); color: var(--primary); }
+        }
+      `}</style>
       <div className="container nav-inner">
         <Logo />
         <nav className="nav-links">
@@ -30,8 +53,21 @@ function Nav() {
           <ThemeToggle />
           <Link to="/login" className="btn btn-outline">Log in</Link>
           <Link to="/register" className="btn btn-primary">Register <ArrowRight size={16} /></Link>
+          <button className="icon-btn nav-burger" onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open}>
+            {open ? <X size={18} /> : <Menu size={18} />}
+          </button>
         </div>
       </div>
+      {open && (
+        <div className="nav-menu">
+          <a href="#features" onClick={close}>Features</a>
+          <a href="#how" onClick={close}>How it works</a>
+          <a href="#who" onClick={close}>Who it's for</a>
+          <a href="#stories" onClick={close}>Success stories</a>
+          <a href="#startups" onClick={close}>Startups</a>
+          <Link to="/login" onClick={close}>Log in</Link>
+        </div>
+      )}
     </header>
   )
 }
@@ -187,6 +223,7 @@ const stories = [
 export default function Landing() {
   return (
     <div>
+      <IntroAnimation />
       <Nav />
 
       <section className="hero">

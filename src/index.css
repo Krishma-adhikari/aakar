@@ -99,6 +99,7 @@
   color-scheme: dark;
 }
 
+
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
 html { scroll-behavior: smooth; }

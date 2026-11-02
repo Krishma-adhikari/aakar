@@ -1,0 +1,485 @@
+/* ---------- Palette ---------- */
+/* Light is the default. Dark applies when data-intro-theme="dark". */
+
+.aakar-intro,
+.intro-flyer {
+  --ai-scale: 1;
+
+  --ai-bg: radial-gradient(
+    ellipse at 50% 42%,
+    #ffffff 0%,
+    #f4f7ff 50%,
+    #e9efff 100%
+  );
+  --ai-blue: #2457e6;
+  --ai-blue-soft: #7ea0ff;
+  --ai-violet: #8a74f2;
+  --ai-ink: #0f1b4d;
+  --ai-muted: #6b78a6;
+  --ai-tagline: #8993b4;
+
+  --ai-glow-1: rgba(98, 140, 255, 0.24);
+  --ai-glow-2: rgba(138, 116, 242, 0.2);
+  --ai-glow-3: rgba(110, 170, 255, 0.16);
+
+  --ai-ring: rgba(36, 87, 230, 0.2);
+  --ai-ring-2: rgba(138, 116, 242, 0.28);
+
+  --ai-skip-bg: rgba(255, 255, 255, 0.6);
+  --ai-skip-border: rgba(36, 87, 230, 0.16);
+
+  --ai-word-glow: rgba(36, 87, 230, 0.28);
+
+  /* navy -> brand blue across the five letters */
+  --ai-letter-0: #0f1b4d;
+  --ai-letter-1: #17297f;
+  --ai-letter-2: #1f45c8;
+  --ai-letter-3: #2457e6;
+  --ai-letter-4: #3a6bf2;
+}
+
+.aakar-intro[data-intro-theme='dark'],
+.intro-flyer[data-intro-theme='dark'] {
+  --ai-bg: radial-gradient(
+    ellipse at 50% 42%,
+    #14102f 0%,
+    #09091c 52%,
+    #04040d 100%
+  );
+  --ai-blue: #6d8dff;
+  --ai-blue-soft: #8fa6ff;
+  --ai-violet: #a58bff;
+  --ai-ink: #eef0ff;
+  --ai-muted: #8d93c4;
+  --ai-tagline: #6c7199;
+
+  --ai-glow-1: rgba(108, 70, 235, 0.34);
+  --ai-glow-2: rgba(60, 80, 220, 0.26);
+  --ai-glow-3: rgba(140, 100, 255, 0.18);
+
+  --ai-ring: rgba(150, 160, 255, 0.2);
+  --ai-ring-2: rgba(170, 140, 255, 0.28);
+
+  --ai-skip-bg: rgba(255, 255, 255, 0.06);
+  --ai-skip-border: rgba(180, 190, 255, 0.18);
+
+  --ai-word-glow: rgba(150, 125, 255, 0.55);
+
+  /* white -> soft lavender, glowing */
+  --ai-letter-0: #ffffff;
+  --ai-letter-1: #f4f2ff;
+  --ai-letter-2: #e8e3ff;
+  --ai-letter-3: #dcd4ff;
+  --ai-letter-4: #cdc2ff;
+}
+
+/* ---------- Overlay ---------- */
+
+.aakar-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--ai-bg);
+}
+
+.aakar-intro.is-leaving {
+  opacity: 0;
+  transition: opacity 1100ms ease;
+  pointer-events: none;
+}
+
+.aakar-intro * {
+  box-sizing: border-box;
+}
+
+/* ---------- Soft glows ---------- */
+
+.intro-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(85px);
+  pointer-events: none;
+  opacity: 0;
+  animation:
+    glowIn 1.5s ease forwards,
+    glowDrift 9s ease-in-out infinite alternate;
+}
+
+.intro-glow-one {
+  width: 440px;
+  height: 440px;
+  left: 6%;
+  top: 8%;
+  background: var(--ai-glow-1);
+}
+
+.intro-glow-two {
+  width: 480px;
+  height: 480px;
+  right: 2%;
+  bottom: 0;
+  background: var(--ai-glow-2);
+  animation-delay: 0.18s, -2s;
+}
+
+.intro-glow-three {
+  width: 280px;
+  height: 280px;
+  left: 40%;
+  top: 36%;
+  background: var(--ai-glow-3);
+  animation-delay: 0.35s, -4s;
+}
+
+@keyframes glowIn {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes glowDrift {
+  from {
+    transform: translate3d(-18px, 12px, 0) scale(0.92);
+  }
+  to {
+    transform: translate3d(22px, -16px, 0) scale(1.1);
+  }
+}
+
+/* ---------- Particles ---------- */
+
+.intro-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.intro-particles span {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ai-blue-soft);
+  opacity: 0;
+  animation: particleFloat 5.5s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -0.4s);
+}
+
+@keyframes particleFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.5);
+  }
+  35% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-60px) scale(1.2);
+  }
+}
+
+/* ---------- Skip ---------- */
+
+.intro-skip {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  z-index: 5;
+  padding: 8px 14px;
+  border: 1px solid var(--ai-skip-border);
+  border-radius: 999px;
+  background: var(--ai-skip-bg);
+  color: var(--ai-muted);
+  font: 600 12px 'Plus Jakarta Sans', system-ui, sans-serif;
+  cursor: pointer;
+  opacity: 0;
+  animation: fadeIn 0.7s ease 0.75s forwards;
+  transition:
+    color 200ms ease,
+    border-color 200ms ease;
+}
+
+.intro-skip:hover,
+.intro-skip:focus-visible {
+  color: var(--ai-blue);
+  border-color: var(--ai-blue);
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- Stage (anchored at the exact screen centre) ---------- */
+
+.intro-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: scale(var(--ai-scale));
+  pointer-events: none;
+}
+
+/* Orbit rings */
+
+.intro-rings {
+  position: absolute;
+  left: -155px;
+  top: -160px;
+  width: 310px;
+  height: 310px;
+}
+
+.intro-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--ai-ring);
+  opacity: 0;
+  animation:
+    ringIn 1.45s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s forwards,
+    ringSpin 28s linear infinite;
+}
+
+.ring-outer {
+  inset: 0;
+}
+
+.ring-inner {
+  inset: 48px;
+  border-color: var(--ai-ring-2);
+  animation-delay: 0.45s, 0s;
+  animation-direction: normal, reverse;
+}
+
+/* tiny satellite on each ring so the rotation reads */
+.intro-ring::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: var(--ai-blue);
+  box-shadow: 0 0 12px var(--ai-blue);
+}
+
+.ring-inner::after {
+  background: var(--ai-violet);
+  box-shadow: 0 0 12px var(--ai-violet);
+}
+
+@keyframes ringIn {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes ringSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Nepal -> World points and arc */
+
+.intro-point {
+  position: absolute;
+  top: 10px;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  animation: fadeIn 1s ease 0.75s forwards;
+}
+
+.point-nepal {
+  left: -112px;
+}
+
+.point-world {
+  left: 112px;
+}
+
+.intro-point-dot {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ai-blue);
+  box-shadow: 0 0 12px var(--ai-blue);
+}
+
+.intro-point-dot.world {
+  background: var(--ai-violet);
+  box-shadow: 0 0 12px var(--ai-violet);
+}
+
+.intro-point-label {
+  position: absolute;
+  left: 0;
+  top: 15px;
+  transform: translateX(-50%);
+  color: var(--ai-muted);
+  font: 600 11px 'Plus Jakarta Sans', system-ui, sans-serif;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.intro-arc {
+  position: absolute;
+  left: -112px;
+  top: -35px;
+  width: 224px;
+  height: 56px;
+  overflow: visible;
+}
+
+.intro-arc-path {
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: arcDraw 1.45s cubic-bezier(0.5, 0, 0.2, 1) 2.5s forwards;
+}
+
+.intro-arc-dot {
+  fill: var(--ai-violet);
+  filter: drop-shadow(0 0 5px var(--ai-violet));
+  opacity: 0;
+  animation: fadeIn 0.6s ease 3.8s forwards;
+}
+
+@keyframes arcDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Nepali word */
+
+.intro-nepali {
+  position: absolute;
+  left: 0;
+  top: 74px;
+  transform: translateX(-50%);
+  color: var(--ai-ink);
+  font: 500 27px 'Noto Sans Devanagari', sans-serif;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  opacity: 0;
+  animation: nepaliIn 1.1s ease 1.95s forwards;
+}
+
+@keyframes nepaliIn {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    translate: 0 10px;
+  }
+  to {
+    opacity: 0.88;
+    filter: blur(0);
+    translate: 0 0;
+  }
+}
+
+/* Tagline */
+
+.intro-tagline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 44px;
+  margin: 0;
+  text-align: center;
+  color: var(--ai-tagline);
+  font: 600 12px 'Plus Jakarta Sans', system-ui, sans-serif;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: fadeIn 1.15s ease 2.6s forwards;
+}
+
+/* ---------- Flying wordmark ---------- */
+/* Positioned from left/top at its centre so the JS can fly it to the logo. */
+
+.intro-flyer {
+  position: fixed;
+  z-index: 100000;
+  left: 50%;
+  top: calc(50% - 70px * var(--ai-scale));
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  pointer-events: none;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: clamp(54px, 10vw, 104px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.22em;
+  padding-left: 0.22em; /* balances the trailing letter-spacing so it's centred */
+  filter: drop-shadow(0 6px 26px var(--ai-word-glow));
+}
+
+.intro-flyer span {
+  display: inline-block;
+  color: var(--c);
+  opacity: 0;
+  filter: blur(16px);
+  transform: translateY(26px);
+  animation: letterReveal 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes letterReveal {
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+/* ---------- Navbar logo ---------- */
+
+/* Only the logo's fade is touched; the navbar itself is left exactly as it was. */
+.nav .logo {
+  transition: opacity 250ms ease;
+}
+
+/* The real logo stays hidden until the wordmark lands on it. */
+body.aakar-intro-playing .nav .logo {
+  opacity: 0;
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 600px) {
+  .aakar-intro,
+  .intro-flyer {
+    --ai-scale: 0.78;
+  }
+
+  .intro-skip {
+    top: 16px;
+    right: 16px;
+  }
+
+  .intro-tagline {
+    font-size: 10px;
+    bottom: 32px;
+  }
+}

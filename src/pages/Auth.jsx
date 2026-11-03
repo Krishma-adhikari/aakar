@@ -215,17 +215,15 @@ export function Register() {
     return out
   }
 
-  const submit = () => {
+   const submit = async () => {
     setSubmitting(true)
-    setTimeout(() => {
-      const res = register({
-        role, name: acc.name.trim(), email: acc.email.trim(), password: acc.password,
-        profile: { Phone: acc.phone, ...profileSummary() }, raw: vals, docs: Object.values(docs),
-      })
-      setSubmitting(false)
-      if (res.error) { setErrors({ email: res.error }); setStep(0); return }
-      nav('/pending')
-    }, 900)
+    const res = await register({
+      role, name: acc.name.trim(), email: acc.email.trim(), password: acc.password,
+      profile: { Phone: acc.phone, ...profileSummary() }, raw: vals, docs: Object.values(docs),
+    })
+    setSubmitting(false)
+    if (res.error) { setErrors({ email: res.error }); setStep(0); return }
+    nav('/pending')
   }
 
   const setA = (k) => (e) => { const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value; setAcc((a) => ({ ...a, [k]: v })) }
@@ -352,10 +350,10 @@ export function Login() {
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(null) // { user, stage }
 
-  const run = (e, em = email, p = pw) => {
+  const run = async (e, em = email, p = pw) => {
     e?.preventDefault()
     setError('')
-    const res = login(em, p)
+      const res = await login(em, p)
     if (res.error) { setError(res.error); return }
     setChecking({ user: res.user, stage: 0 })
   }

@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as demo from './data/demo'
+import { supabase } from './lib/supabase'
 
 const KEY = 'aakar-demo-v2'
 const Ctx = createContext(null)
@@ -40,10 +41,54 @@ const notOlderThanADay = (iso) => new Date(iso) > new Date(new Date().getTime() 
 export const initialsOf = (name = '') => name.replace(/^(Dr\.|Er\.|CA)\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || 'A'
 const pickColor = (s) => demo.COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % demo.COLORS.length]
 
+/* ---------- Supabase helpers ---------- */
+
+// Turn a row from the Supabase "profiles" table into the user object the app already uses.
+const fromRow = (row, prev = {}) => ({
+  id: row.id,
+  email: row.email || prev.email || '',
+  role: row.is_admin ? 'admin' : row.role,
+  status: row.status,
+  name: row.full_name,
+  initials: initialsOf(row.full_name),
+  color: pickColor(row.full_name),
+  submittedAt: row.created_at,
+  rejectReason: row.reject_reason || undefined,
+  profile: row.details?.profile,
+  raw: row.details?.raw,
+  docs: row.details?.docs || [],
+  remote: true,
+})
+
+// Merge Supabase rows into local state. Approved members also get their platform record
+// (startup listing, mentor profile, ...) created if it is not there yet.
+function withRemote(s, rows) {
+  const byId = new Map(s.users.map((u) => [u.id, u]))
+  rows.forEach((r) => byId.set(r.id, { ...byId.get(r.id), ...fromRow(r, byId.get(r.id)) }))
+  const next = { ...s, users: [...byId.values()] }
+  rows.forEach((r) => {
+    if (r.status !== 'approved' || r.is_admin) return
+    const u = next.users.find((x) => x.id === r.id)
+    if (!u || u.refId) return
+    const [listKey, entity] = buildEntity(u)
+    if (!listKey) return
+    if (!next[listKey].some((x) => x.id === entity.id)) next[listKey] = [entity, ...next[listKey]]
+    next.users = next.users.map((x) => (x.id === u.id ? { ...x, refId: entity.id } : x))
+  })
+  return next
+}
+
+// Used only if Supabase cannot be reached, so the demo never breaks.
+function registerLocal(setState, { role, name, email, password, profile, raw, docs }) {
+  const u = { id: uid('u-'), role, name, email, password, status: 'pending', initials: initialsOf(name), color: pickColor(name), submittedAt: nowISO(), profile, raw, docs }
+  setState((s) => ({ ...s, users: [...s.users, u], currentUserId: u.id }))
+  return { user: u }
+}
+
 // Turn an approved registration into a platform record (startup listing, mentor profile, ...)
 function buildEntity(user) {
   const r = user.raw || {}
-  const base = { id: uid(user.role.slice(0, 3) + '-'), name: user.name, initials: user.initials, color: user.color }
+  const base = { id: user.remote ? 'r-' + user.id.slice(0, 8) : uid(user.role.slice(0, 3) + '-'), name: user.name, initials: user.initials, color: user.color }
   switch (user.role) {
     case 'investor':
       return ['investors', { ...base, type: r.investorType || 'Angel investor', firm: r.firm || 'Independent', location: r.country || user.profile?.Country || 'Abroad', ticket: r.ticket || user.profile?.['Ticket size'] || '—', sectors: r.sectors || [], bio: r.bio || '', visible: !!r.visible, deals: 0 }]
@@ -89,23 +134,78 @@ export function StoreProvider({ children }) {
   }, [state])
 
   const api = useMemo(() => ({
-    login(email, password) {
-      const u = state.users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase())
-      if (!u) return { error: 'No account found with this email.' }
-      if (u.password !== password) return { error: 'Incorrect password.' }
-      return { user: u }
+    // Demo accounts are checked first (works offline). Everything else goes to Supabase.
+    async login(email, password) {
+      const em = email.trim().toLowerCase()
+      const local = state.users.find((x) => x.password && x.email.toLowerCase() === em)
+      if (local) {
+        if (local.password !== password) return { error: 'Incorrect password.' }
+        return { user: local }
+      }
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email: em, password })
+        if (error) return { error: error.message === 'Invalid login credentials' ? 'Incorrect email or password.' : error.message }
+        const { data: row, error: pErr } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
+        if (pErr || !row) {
+          await supabase.auth.signOut()
+          return { error: 'This account has no profile yet. Ask an admin to check the profiles table.' }
+        }
+        const withEmail = { ...row, email: row.email || data.user.email }
+        setState((s) => withRemote(s, [withEmail]))
+        return { user: fromRow(withEmail) }
+      } catch {
+        return { error: 'Could not reach the server. Use a demo account instead.' }
+      }
     },
     setCurrent(id) { setState((s) => ({ ...s, currentUserId: id })) },
-    logout() { setState((s) => ({ ...s, currentUserId: null })) },
-
-    register({ role, name, email, password, profile, raw, docs }) {
-      if (state.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) return { error: 'An account with this email already exists.' }
-      const u = { id: uid('u-'), role, name, email, password, status: 'pending', initials: initialsOf(name), color: pickColor(name), submittedAt: nowISO(), profile, raw, docs }
-      setState((s) => ({ ...s, users: [...s.users, u], currentUserId: u.id }))
-      return { user: u }
+    logout() {
+      supabase.auth.signOut().catch(() => {})
+      setState((s) => ({ ...s, currentUserId: null }))
     },
 
-    approve(userId) {
+    async register(data) {
+      const { role, name, password, profile, raw, docs } = data
+      const email = data.email.trim()
+      if (state.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) return { error: 'An account with this email already exists.' }
+      try {
+        const { data: res, error } = await supabase.auth.signUp({ email, password })
+        if (error) throw error
+        if (!res.session) return { error: 'Supabase is asking for email confirmation. Turn off "Confirm email" in Supabase (Authentication, Sign In / Providers, Email).' }
+        const row = {
+          id: res.user.id, full_name: name, role, email,
+          country: raw?.country ?? null, bio: raw?.bio ?? null,
+          keywords: raw?.interests || raw?.fields || raw?.sectors || [],
+          details: { profile, raw, docs },
+        }
+        const { error: pErr } = await supabase.from('profiles').insert(row)
+        if (pErr) { await supabase.auth.signOut(); return { error: pErr.message } }
+        const u = fromRow({ ...row, status: 'pending', is_admin: false, created_at: nowISO() })
+        setState((s) => ({ ...s, users: [...s.users.filter((x) => x.id !== u.id), u], currentUserId: u.id }))
+        return { user: u }
+      } catch (err) {
+        if (err?.name === 'AuthRetryableFetchError' || err instanceof TypeError) return registerLocal(setState, { ...data, email })
+        return { error: err?.message || 'Could not create the account.' }
+      }
+    },
+
+    // Admin only: load every application from Supabase into the queue.
+    async refreshApplications() {
+      try {
+        const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+        if (error) return { error: error.message }
+        setState((s) => withRemote(s, data))
+        return {}
+      } catch {
+        return { error: 'Could not reach the server.' }
+      }
+    },
+
+    async approve(userId) {
+      const target = state.users.find((x) => x.id === userId)
+      if (target?.remote) {
+        const { error } = await supabase.rpc('set_profile_status', { target: userId, new_status: 'approved', reason: null })
+        if (error) return { error: error.message }
+      }
       setState((s) => {
         const u = s.users.find((x) => x.id === userId)
         if (!u) return s
@@ -113,14 +213,24 @@ export function StoreProvider({ children }) {
         let refId = u.refId
         if (!refId) {
           const [listKey, entity] = buildEntity(u)
-          if (listKey) { next[listKey] = [entity, ...s[listKey]]; refId = entity.id }
+          if (listKey) {
+            if (!s[listKey].some((x) => x.id === entity.id)) next[listKey] = [entity, ...s[listKey]]
+            refId = entity.id
+          }
         }
         next.users = s.users.map((x) => (x.id === userId ? { ...x, status: 'approved', refId, reviewedAt: nowISO(), rejectReason: undefined } : x))
         return next
       })
+      return {}
     },
-    reject(userId, reason) {
+    async reject(userId, reason) {
+      const target = state.users.find((x) => x.id === userId)
+      if (target?.remote) {
+        const { error } = await supabase.rpc('set_profile_status', { target: userId, new_status: 'rejected', reason })
+        if (error) return { error: error.message }
+      }
       setState((s) => ({ ...s, users: s.users.map((x) => (x.id === userId ? { ...x, status: 'rejected', rejectReason: reason, reviewedAt: nowISO() } : x)) }))
+      return {}
     },
 
     updateEntity(listKey, id, patch) {
@@ -224,11 +334,9 @@ export function StoreProvider({ children }) {
   )
 }
 
- 
 export const useStore = () => useContext(Ctx)
 
 // Notifications for the signed-in user, derived from shared state.
- 
 export function useNotifications() {
   const { state, user, entity } = useStore()
   return useMemo(() => {

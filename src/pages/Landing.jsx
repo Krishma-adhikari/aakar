@@ -46,8 +46,8 @@ function Nav() {
           <a href="#features">Features</a>
           <a href="#how">How it works</a>
           <a href="#who">Who it's for</a>
-          <a href="#stories">Success stories</a>
           <a href="#startups">Startups</a>
+          <a href="#stories">Success stories</a>
         </nav>
         <div className="row" style={{ gap: 10 }}>
           <ThemeToggle />
@@ -63,8 +63,8 @@ function Nav() {
           <a href="#features" onClick={close}>Features</a>
           <a href="#how" onClick={close}>How it works</a>
           <a href="#who" onClick={close}>Who it's for</a>
-          <a href="#stories" onClick={close}>Success stories</a>
           <a href="#startups" onClick={close}>Startups</a>
+          <a href="#stories" onClick={close}>Success stories</a>
           <Link to="/login" onClick={close}>Log in</Link>
         </div>
       )}
@@ -153,13 +153,14 @@ function HeroVisual() {
   const nav = useNavigate()
   const [msg, setMsg] = useState('')
   return (
-    <div className="hero-visual">
+    <div className="hero-visual" style={{ height: 640 }}>
       <HeroScene />
       <Spark style={{ left: 160, top: 22 }} size={22} />
       <Spark style={{ left: 120, top: 330, animationDelay: '-1.2s', opacity: .6 }} size={12} />
       <Spark style={{ right: 40, top: 70, animationDelay: '-2s', opacity: .7 }} size={14} />
 
-      <div className="glass float" style={{ left: 20, top: 70, width: 300, padding: 18 }}>
+      <div className="glass float" style={{ left: 20, top: 60, width: 300, padding: 18 }}>
+        <span className="badge badge-blue" style={{ marginBottom: 10 }}>Invest in Nepal</span>
         <div className="row">
           <span className="avatar" style={{ width: 46, height: 46, backgroundColor: 'var(--primary)' }}>{s.initials}</span>
           <div className="grow">
@@ -173,7 +174,8 @@ function HeroVisual() {
         <div className="row mt-3" style={{ gap: 6 }}>{s.traction.slice(0, 2).map((t) => <span key={t.k} className="chip" style={{ background: 'var(--primary-50)' }}>{t.v} {t.k.toLowerCase()}</span>)}</div>
       </div>
 
-      <div className="glass float d2" style={{ right: 40, top: 250, width: 320, padding: 18 }}>
+      <div className="glass float d2" style={{ right: 40, top: 262, width: 320, padding: 18 }}>
+        <span className="badge badge-violet" style={{ marginBottom: 10 }}>Mentorship</span>
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <div className="ic-tile" style={{ background: 'var(--primary-50)', color: 'var(--primary)', borderRadius: 99, width: 40, height: 40 }}><Bell size={18} /></div>
           <div className="small">
@@ -184,7 +186,8 @@ function HeroVisual() {
         <button className="btn btn-dark btn-sm btn-block mt-3" style={{ background: 'var(--navy)', color: '#fff' }} onClick={() => nav('/register/student')}>Reserve my seat <ArrowRight size={14} /></button>
       </div>
 
-      <div className="glass float d3" style={{ left: 40, top: 418, width: 310, padding: 16 }}>
+      <div className="glass float d3" style={{ left: 40, top: 448, width: 310, padding: 16 }}>
+        <span className="badge badge-teal" style={{ marginBottom: 10 }}>Chat</span>
         <div className="row small">
           <span className="avatar sm" style={{ backgroundColor: '#c0527a' }}>AT</span>
           <b>Aarushi Thapa</b>
@@ -203,7 +206,7 @@ function HeroVisual() {
 
 const pillars = [
   { n: '01', icon: Rocket, grad: 'linear-gradient(135deg,#3a6cf0,#1d47c8)', shade: 'rgba(33,82,217,.7)', color: 'var(--primary)', title: 'Invest in Nepal', text: 'Startups publish their full profile, pitch and funding ask. Diaspora investors browse, save and start a conversation with founders in one click.', pts: ['Full pitch, traction and use of funds', 'Direct chat between investor and founder', 'Investors stay private unless they choose to be visible'] },
-  { n: '02', icon: Users, grad: 'linear-gradient(135deg,#8b6cf5,#5b3ad6)', shade: 'rgba(109,74,230,.7)', color: 'var(--violet)', title: 'Mentor the next generation', text: 'Nepali professionals abroad volunteer to guide students on higher studies, jobs and global opportunities, matched by field and interests.', pts: ['Keyword matching between students and mentors', 'One-to-one mentorship on request', 'Group sessions notify every interested student'] },
+  { n: '02', icon: Users, grad: 'linear-gradient(135deg,#8b6cf5,#5b3ad6)', shade: 'rgba(109,74,230,.7)', color: 'var(--violet)', title: 'Mentor the next generation', text: 'Students find the right mentor through keyword matching and get guidance on studies, jobs and scholarships from Nepalis abroad.', pts: ['Find mentors by field, country or interest', 'One-to-one mentorship on request', 'Group sessions notify every interested student'] },
   { n: '03', icon: Wrench, grad: 'linear-gradient(135deg,#22b8d8,#0a7f9c)', shade: 'rgba(8,145,178,.7)', color: 'var(--teal)', title: 'Tech Help Desk', text: 'NGOs, schools and startups post the technical problems they face. Engineers anywhere in the world reply with solutions over chat.', pts: ['Post a challenge in minutes', 'Experts send solutions directly', 'Turn advice into ongoing support'] },
 ]
 
@@ -237,6 +240,18 @@ export default function Landing() {
               </span>
             </h1>
             <p className="hero-lede">Aakar brings the Nepali diaspora and Nepal together on one trusted platform. Fund startups, mentor students and solve local tech problems from wherever you live.</p>
+            <div className="stack" style={{ gap: 12, marginTop: 24, maxWidth: 520 }}>
+              {[
+                [Rocket, 'Invest in Nepal', 'Back verified startups and chat with founders.'],
+                [Users, 'Mentor students', 'Guide students on studies, jobs and scholarships.'],
+                [Wrench, 'Solve challenges', 'Help schools, NGOs and startups fix real problems.'],
+              ].map(([I, t, d]) => (
+                <div key={t} className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+                  <span className="ic-tile" style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--primary-50)', color: 'var(--primary)' }}><I size={18} /></span>
+                  <div className="small" style={{ paddingTop: 7 }}><b>{t}</b> <span className="muted">· {d}</span></div>
+                </div>
+              ))}
+            </div>
             <div className="hero-ctas">
               <Link to="/register" className="btn btn-primary btn-lg">Join Aakar, it’s free <ArrowRight size={18} /></Link>
               <a href="#startups" className="play-btn"><span className="pc"><Play size={18} fill="currentColor" /></span> Explore startups</a>
@@ -279,7 +294,8 @@ export default function Landing() {
                 <p>{p.text}</p>
                 <ul>{p.pts.map((t) => <li key={t}><CheckCircle2 size={16} color={p.color} /> {t}</li>)}</ul>
                 <div className="pillar-preview" style={{ marginTop: 'auto' }}>
-                  {p.n === '01' && <div className="row small"><Avatar p={startups[3]} size="sm" square /><div className="grow"><b>{startups[3].name}</b><div className="xs muted">Asking {money(startups[3].ask)} · {startups[3].stage}</div></div><span className="btn btn-primary btn-sm"><MessageCircle size={14} /> Chat</span></div>}
+
+                  {p.n === '01' && <div className="row small"><Avatar p={startups[3]} size="sm" square /><div className="grow"><b>{startups[3].name}</b><div className="xs muted">Raising {money(startups[3].ask)} · {startups[3].stage}</div></div><span className="btn btn-primary btn-sm"><MessageCircle size={14} /> Chat</span></div>}
                   {p.n === '02' && <div className="row small"><Avatar p={mentors[1]} size="sm" /><div className="grow"><b>{mentors[1].name}</b><div className="xs muted">Matched on <span style={{ color: 'var(--violet)', fontWeight: 700 }}>Scholarships · Study in UK</span></div></div></div>}
                   {p.n === '03' && <div className="row small"><span className="avatar sm sq" style={{ backgroundColor: '#0891b2' }}><Lightbulb size={15} /></span><div className="grow"><b>School lab PCs too slow</b><div className="xs muted">2 solutions suggested · Sindhupalchok</div></div></div>}
                 </div>
@@ -350,7 +366,7 @@ export default function Landing() {
                   <span className="badge" style={{ background: 'rgba(255,255,255,.08)', color: '#cfdcff' }}>{s.stage}</span>
                 </div>
                 <p className="small mt-3" style={{ color: '#cfd8ef', minHeight: 44 }}>{s.tagline}</p>
-                <div className="row-between mt-4 xs" style={{ color: '#a9b6d8' }}><span><b style={{ color: '#fff', fontSize: 15 }}>{money(s.raised)}</b> raised</span><span>Ask {money(s.ask)}</span></div>
+                <div className="row-between mt-4 xs" style={{ color: '#a9b6d8' }}><span><b style={{ color: '#fff', fontSize: 15 }}>{money(s.raised)}</b> raised</span><span>Raising {money(s.ask)}</span></div>
                 <div className="progress mt-2"><span style={{ width: `${(s.raised / s.ask) * 100}%` }} /></div>
               </div>
             ))}

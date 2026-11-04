@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Avatar, Logo, RoleBadge, ThemeToggle, ago } from '../components/ui'
 import {
   Bell, Bookmark, CalendarDays, CheckCircle2, Compass, GraduationCap, Home, Landmark, Lightbulb, LogOut, MessageCircle,
-  Rocket, Search, User, Users, Wrench,
+  Rocket, User, Users, Wrench,
 } from 'lucide-react'
-import { Avatar, Logo, RoleBadge, ThemeToggle, ago } from '../components/ui'
 import { useNotifications, useStore } from '../store'
 
 const NAV = {
   investor: [['/app/startups', 'Discover startups', Compass], ['/app/saved', 'Saved', Bookmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My profile', User]],
   startup: [['/app', 'Dashboard', Home], ['/app/investors', 'Investors', Landmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My listing', Rocket]],
   student: [['/app', 'Home', Home], ['/app/sessions', 'Sessions', CalendarDays], ['/app/mentors', 'Find mentors', Users], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'My profile', User]],
-  professional: [['/app', 'Home', Home], ['/app/sessions', 'My sessions', CalendarDays], ['/app/students', 'Students', GraduationCap], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'My profile', User]],
+  professional: [['/app', 'Home', Home], ['/app/sessions', 'My sessions', CalendarDays], ['/app/students', 'Matched Students', GraduationCap], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'My profile', User]],
   organization: [['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'Organization', User]],
 }
 
@@ -92,7 +92,6 @@ export default function AppShell() {
       </aside>
       <div className="main">
         <header className="topbar">
-          <div className="input-icon mobile-hide" style={{ width: 340, maxWidth: '100%' }}><Search size={16} /><input className="input" style={{ height: 40, borderRadius: 999 }} placeholder="Search Aakar…" /></div>
           <div className="row" style={{ marginLeft: 'auto' }}>
             <span className="badge badge-green mobile-hide"><CheckCircle2 size={12} /> Verified {user.role}</span>
             <ThemeToggle />

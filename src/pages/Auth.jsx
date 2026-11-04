@@ -254,7 +254,6 @@ export function Register() {
         {step === 0 && (
           <>
             <h1 style={{ fontSize: 32 }}>Create your {r.label.toLowerCase()} account</h1>
-            <p className="muted mt-2">This is the person who will manage the account{role === 'startup' || role === 'organization' ? ` for your ${role}` : ''}.</p>
             <div className="grid-2 mt-6">
               <div className="field span-2"><label>Full name <span className="req">*</span></label><input className={`input ${errors.name ? 'invalid' : ''}`} value={acc.name} onChange={setA('name')} placeholder="As on your ID" />{errors.name && <span className="err">{errors.name}</span>}</div>
               <div className="field"><label>Email <span className="req">*</span></label><input className={`input ${errors.email ? 'invalid' : ''}`} value={acc.email} onChange={setA('email')} placeholder="you@example.com" />{errors.email && <span className="err">{errors.email}</span>}</div>

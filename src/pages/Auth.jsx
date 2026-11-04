@@ -399,15 +399,6 @@ export function Login() {
               <button className="btn btn-primary btn-lg btn-block" type="submit">Log in <ArrowRight size={18} /></button>
             </form>
             <div className="mt-8">
-              <div className="row-between"><span className="xs faint bold">DEMO ACCOUNTS · PASSWORD demo123</span></div>
-              <div className="demo-accounts mt-3">
-                {DEMO.map(([em, role, label]) => (
-                  <button key={em} className="demo-acc" onClick={() => { setEmail(em); setPw('demo123'); run(null, em, 'demo123') }}>
-                    <span className="avatar sm" style={{ background: ROLES[role]?.color || '#0d1b45' }}>{(() => { const I = ROLES[role]?.icon || ShieldCheck; return <I size={14} /> })()}</span>
-                    <span className="grow"><span className="small bold" style={{ display: 'block' }}>{label}</span><span className="xs muted" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>{em}</span></span>
-                  </button>
-                ))}
-              </div>
             </div>
           </>
         ) : (

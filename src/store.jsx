@@ -85,10 +85,42 @@ function registerLocal(setState, { role, name, email, password, profile, raw, do
   return { user: u }
 }
 
+/* ---------- Real chat helpers ---------- */
+
+const KIND = { investor: 'investor', startup: 'startup', student: 'student', professional: 'mentor', organization: 'organization' }
+const ROLE_LABEL = { investor: 'Investor', startup: 'Startup founder', student: 'Student', professional: 'Professional', organization: 'Organization' }
+
+// Describe a real person (a profiles row) the way the Messages page expects a chat peer.
+const peerFromRow = (row) => {
+  const u = fromRow(row)
+  return { name: u.name, initials: u.initials, color: u.color, subtitle: ROLE_LABEL[row.role] || 'Member', kind: KIND[row.role] || 'professional', refId: 'r-' + row.id.slice(0, 8), userId: row.id }
+}
+
+// If the person you are messaging is a real account, return their Supabase user id.
+const peerUserId = (s, peer) => peer.userId
+  || [...s.startups, ...s.investors, ...s.mentors, ...s.students, ...s.organizations].find((e) => e.id === peer.refId)?.userId
+
+// Save one message to Supabase (and create the conversation first if needed).
+async function sendRemote({ setState, toast, convId, remoteId, remoteUserId, meId, text }) {
+  try {
+    let rid = remoteId
+    if (!rid) {
+      const { data, error } = await supabase.rpc('start_conversation', { peer_id: remoteUserId })
+      if (error) { toast(error.message); return }
+      rid = data
+      setState((s) => ({ ...s, conversations: s.conversations.map((c) => (c.id === convId ? { ...c, remoteId: rid } : c)) }))
+    }
+    const { error } = await supabase.from('messages').insert({ conversation_id: rid, sender_id: meId, body: text })
+    if (error) toast('Message not sent: ' + error.message)
+  } catch {
+    toast('Message not sent. Check your connection.')
+  }
+}
+
 // Turn an approved registration into a platform record (startup listing, mentor profile, ...)
 function buildEntity(user) {
   const r = user.raw || {}
-  const base = { id: user.remote ? 'r-' + user.id.slice(0, 8) : uid(user.role.slice(0, 3) + '-'), name: user.name, initials: user.initials, color: user.color }
+  const base = { id: user.remote ? 'r-' + user.id.slice(0, 8) : uid(user.role.slice(0, 3) + '-'), userId: user.remote ? user.id : undefined, name: user.name, initials: user.initials, color: user.color }
   switch (user.role) {
     case 'investor':
       return ['investors', { ...base, type: r.investorType || 'Angel investor', firm: r.firm || 'Independent', location: r.country || user.profile?.Country || 'Abroad', ticket: r.ticket || user.profile?.['Ticket size'] || '—', sectors: r.sectors || [], bio: r.bio || '', visible: !!r.visible, deals: 0 }]
@@ -113,6 +145,9 @@ export function StoreProvider({ children }) {
   const [typing, setTyping] = useState({})
   const [toasts, setToasts] = useState([])
   const timers = useRef([])
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const pending = useRef({}) // conversations created in this same tick, before state updates
 
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(state)) } catch { /* ignore */ }
@@ -126,6 +161,101 @@ export function StoreProvider({ children }) {
   }, [])
 
   const user = state.users.find((u) => u.id === state.currentUserId) || null
+
+  // For real (Supabase) accounts: load other members and past chats, then listen for new messages live.
+  const meId = user?.remote ? user.id : null
+  useEffect(() => {
+    if (!meId) return undefined
+    let alive = true
+
+    const toLocal = (conv, profile, msgs) => ({
+      id: 'rc-' + conv.id,
+      remoteId: conv.id,
+      remoteUserId: profile.id,
+      ownerId: meId,
+      peer: peerFromRow(profile),
+      messages: msgs.map((m) => ({ rid: m.id, from: m.sender_id === meId ? 'me' : 'peer', text: m.body, at: m.created_at })),
+    })
+
+   const mergeConvs = (list) => setState((s) => {
+  const merged = list.map((remote) => {
+    const existing = s.conversations.find((c) =>
+      c.ownerId === meId &&
+      (
+        c.remoteId === remote.remoteId ||
+        (!c.remoteId && c.remoteUserId === remote.remoteUserId)
+      )
+    )
+
+    return existing
+      ? { ...remote, id: existing.id }
+      : remote
+  })
+
+  const remoteIds = new Set(list.map((c) => c.remoteId))
+  const peers = new Set(list.map((c) => c.remoteUserId))
+
+  const keep = s.conversations.filter((c) =>
+    !(c.remoteId && remoteIds.has(c.remoteId)) &&
+    !(c.remoteUserId && !c.remoteId && peers.has(c.remoteUserId))
+  )
+
+  return { ...s, conversations: [...merged, ...keep] }
+    })
+
+    const loadAll = async () => {
+      try {
+        const { data: profs } = await supabase.from('profiles').select('*').eq('status', 'approved')
+        if (alive && profs) setState((s) => withRemote(s, profs))
+        const { data: convs } = await supabase.from('conversations').select('*')
+        if (!alive || !convs?.length) return
+        const { data: msgs } = await supabase.from('messages').select('*').in('conversation_id', convs.map((c) => c.id)).order('created_at', { ascending: true })
+        const otherIds = convs.map((c) => (c.user_a === meId ? c.user_b : c.user_a))
+        const { data: others } = await supabase.from('profiles').select('*').in('id', otherIds)
+        if (!alive) return
+        const list = convs.map((c) => {
+          const profile = (others || []).find((p) => p.id === (c.user_a === meId ? c.user_b : c.user_a))
+          return profile ? toLocal(c, profile, (msgs || []).filter((m) => m.conversation_id === c.id)) : null
+        }).filter(Boolean)
+        mergeConvs(list)
+      } catch { /* offline: keep what we already have */ }
+    }
+
+    const receive = async (m) => {
+      if (m.sender_id === meId) return // my own messages are already on screen
+      const known = stateRef.current.conversations.find((c) => c.remoteId === m.conversation_id)
+      if (known) {
+        setState((s) => ({
+          ...s,
+          conversations: s.conversations.map((c) => (c.remoteId !== m.conversation_id || c.messages.some((x) => x.rid === m.id)
+            ? c
+            : { ...c, messages: [...c.messages, { rid: m.id, from: 'peer', text: m.body, at: m.created_at }] })),
+        }))
+        return
+      }
+      try {
+        const { data: conv } = await supabase.from('conversations').select('*').eq('id', m.conversation_id).single()
+        if (!conv) return
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', conv.user_a === meId ? conv.user_b : conv.user_a).single()
+        const { data: msgs } = await supabase.from('messages').select('*').eq('conversation_id', conv.id).order('created_at', { ascending: true })
+        if (!profile || !alive) return
+        setState((s) => withRemote(s, [profile]))
+        mergeConvs([toLocal(conv, profile, msgs || [m])])
+      } catch { /* ignore */ }
+    }
+
+    loadAll()
+    const channel = supabase
+      .channel('chat-' + meId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => receive(payload.new))
+      .subscribe()
+    window.addEventListener('focus', loadAll)
+    return () => {
+      alive = false
+      window.removeEventListener('focus', loadAll)
+      supabase.removeChannel(channel)
+    }
+  }, [meId])
 
   const entityOf = useCallback((u) => {
     if (!u?.refId) return null
@@ -247,17 +377,27 @@ export function StoreProvider({ children }) {
 
     // Opens (or creates) a conversation for the current user with a peer. Returns its id.
     startChat(peer, opener) {
-      const existing = state.conversations.find((c) => c.ownerId === state.currentUserId && c.peer.refId === peer.refId && c.peer.name === peer.name)
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      const found = me?.remote ? peerUserId(state, peer) : undefined
+      const targetId = found && found !== me.id ? found : undefined
+      const existing = state.conversations.find((c) => c.ownerId === state.currentUserId && (targetId ? c.remoteUserId === targetId : c.peer.refId === peer.refId && c.peer.name === peer.name))
       if (existing) return existing.id
       const id = uid('cv')
-      const conv = { id, ownerId: state.currentUserId, peer, messages: opener ? [{ from: 'system', text: opener, at: nowISO() }] : [] }
+      const conv = { id, ownerId: state.currentUserId, peer, remoteUserId: targetId, messages: opener ? [{ from: 'system', text: opener, at: nowISO() }] : [] }
+      pending.current[id] = conv
       setState((s) => ({ ...s, conversations: [conv, ...s.conversations] }))
       return id
     },
     // kindHint is used when the conversation was created in this same tick.
     sendMessage(convId, text, kindHint) {
-      const conv = state.conversations.find((c) => c.id === convId)
+      const conv = state.conversations.find((c) => c.id === convId) || pending.current[convId]
+      const me = state.users.find((u) => u.id === state.currentUserId)
       setState((s) => ({ ...s, conversations: s.conversations.map((c) => (c.id === convId ? { ...c, messages: [...c.messages, { from: 'me', text, at: nowISO() }] } : c)) }))
+      if (conv?.remoteUserId && me?.remote) {
+        // Real person on the other side: save to Supabase, no fake reply.
+        sendRemote({ setState, toast, convId, remoteId: conv.remoteId, remoteUserId: conv.remoteUserId, meId: me.id, text })
+        return
+      }
       const kind = conv?.peer.kind || kindHint
       if (!kind) return
       const pool = demo.autoReplies[kind] || demo.autoReplies.professional
@@ -321,7 +461,7 @@ export function StoreProvider({ children }) {
       try { localStorage.removeItem(KEY) } catch { /* ignore */ }
       setState(initial())
     },
-  }), [state])
+  }), [state, toast])
 
   const value = { state, user, entity: entityOf(user), entityOf, typing, toast, ...api }
   return (

@@ -243,7 +243,7 @@ export default function Landing() {
             <div className="stack" style={{ gap: 12, marginTop: 24, maxWidth: 520 }}>
               {[
                 [Rocket, 'Invest in Nepal', 'Back verified startups and chat with founders.'],
-                [Users, 'Mentor students', 'Guide students on studies, jobs and scholarships.'],
+                [Users, 'Mentor students', 'Host sessions and guide students on studies, jobs and scholarships.'],
                 [Wrench, 'Solve challenges', 'Help schools, NGOs and startups fix real problems.'],
               ].map(([I, t, d]) => (
                 <div key={t} className="row" style={{ gap: 12, alignItems: 'flex-start' }}>

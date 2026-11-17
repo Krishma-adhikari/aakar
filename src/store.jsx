@@ -162,6 +162,7 @@ function buildEntity(user) {
 export function StoreProvider({ children }) {
   const [state, setState] = useState(load)
   const [typing, setTyping] = useState({})
+  const [onlineUsers, setOnlineUsers] = useState([])
   const [toasts, setToasts] = useState([])
   const timers = useRef([])
   const stateRef = useRef(state)
@@ -184,6 +185,45 @@ export function StoreProvider({ children }) {
 
   // For real (Supabase) accounts: load other members and past chats, then listen for new messages live.
   const meId = user?.remote ? user.id : null
+  // Track online members using Supabase Presence.
+  useEffect(() => {
+    if (!meId) {
+      setOnlineUsers([])
+      return
+    }
+
+    let alive = true
+
+    const presenceChannel = supabase
+      .channel('aakar-online-members', {
+        config: {
+          presence: {
+            key: meId,
+          },
+        },
+      })
+      .on('presence', { event: 'sync' }, () => {
+        if (!alive) return
+
+        const presenceState = presenceChannel.presenceState()
+
+        setOnlineUsers(Object.keys(presenceState))
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({
+            user_id: meId,
+            online_at: new Date().toISOString(),
+          })
+        }
+      })
+
+    return () => {
+      alive = false
+      setOnlineUsers([])
+      supabase.removeChannel(presenceChannel)
+    }
+  }, [meId])
   useEffect(() => {
     if (!meId) return undefined
     let alive = true
@@ -197,8 +237,6 @@ export function StoreProvider({ children }) {
       messages: msgs.map((m) => ({ rid: m.id, from: m.sender_id === meId ? 'me' : 'peer', text: m.body, at: m.created_at })),
     })
 
-    // Replace local copies with the server's version, but keep each chat's existing id
-    // (and its local "context" lines) so an open chat does not disappear.
     const mergeConvs = (list) => setState((s) => {
       const matched = new Set()
       const merged = list.map((n) => {
@@ -327,7 +365,7 @@ export function StoreProvider({ children }) {
     },
     setCurrent(id) { setState((s) => ({ ...s, currentUserId: id })) },
     logout() {
-      supabase.auth.signOut().catch(() => {})
+      supabase.auth.signOut().catch(() => { })
       setState((s) => ({ ...s, currentUserId: null }))
     },
 
@@ -472,7 +510,7 @@ export function StoreProvider({ children }) {
       const mentorUserId = state.mentors.find((m) => m.id === mentorId)?.userId
       if (me?.remote && mentorUserId) {
         // Real student and real mentor: the request is saved so the mentor receives it.
-        ;(async () => {
+        ; (async () => {
           try {
             const { data, error } = await supabase.from('mentorship_requests').insert({ student_id: me.id, mentor_id: mentorUserId, message }).select().single()
             if (error) { toast(error.code === '23505' ? 'You already have a pending request with this mentor.' : error.message); return }
@@ -487,7 +525,7 @@ export function StoreProvider({ children }) {
       const real = state.requests.find((r) => r.id === reqId)
       if (real?.remote) {
         // The database function marks it, opens the chat and sends the student their welcome message.
-        ;(async () => {
+        ; (async () => {
           try {
             const { error } = await supabase.rpc('respond_mentorship', { request_id: reqId, do_accept: status === 'accepted' })
             if (error) { toast(error.message); return }
@@ -529,7 +567,7 @@ export function StoreProvider({ children }) {
       const me = state.users.find((u) => u.id === state.currentUserId)
       if (me?.remote) {
         // Saved to Supabase so every member (mentors included) sees it.
-        ;(async () => {
+        ; (async () => {
           try {
             const { data: row, error } = await supabase.from('challenges').insert({
               poster_id: me.id, poster_type: me.role === 'startup' ? 'startup' : 'organization',
@@ -548,7 +586,7 @@ export function StoreProvider({ children }) {
       const me = state.users.find((u) => u.id === state.currentUserId)
       if (ch?.remote && me?.remote) {
         // The database function saves the idea and delivers it to the poster as a chat message.
-        ;(async () => {
+        ; (async () => {
           try {
             const { data: rid, error } = await supabase.rpc('respond_challenge', { challenge_id: challengeId, response_body: text })
             if (error) { toast(error.message); return }
@@ -578,7 +616,16 @@ export function StoreProvider({ children }) {
     },
   }), [state, toast])
 
-  const value = { state, user, entity: entityOf(user), entityOf, typing, toast, ...api }
+  const value = {
+    state,
+    user,
+    entity: entityOf(user),
+    entityOf,
+    typing,
+    onlineUsers,
+    toast,
+    ...api,
+  }
   return (
     <Ctx.Provider value={value}>
       {children}

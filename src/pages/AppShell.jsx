@@ -60,20 +60,21 @@ function Notifications() {
 }
 
 export default function AppShell() {
-  const { user, entity, logout, state } = useStore()
+  const { user, entity, logout, state, unreadTotal } = useStore()
   const nav = useNavigate()
   if (!user) return <Navigate to="/login" replace />
   if (user.role === 'admin') return <Navigate to="/admin" replace />
   if (user.status !== 'approved') return <Navigate to="/pending" replace />
 
   const items = NAV[user.role]
-  const convCount = state.conversations.filter((c) => c.ownerId === user.id && c.messages.at(-1)?.from === 'peer').length
+  // Messages badge = messages from the other person that I have not seen yet.
+  // It clears when I open the chat, and comes back when a new message arrives.
   const reqCount = user.role === 'professional' ? state.requests.filter((r) => r.mentorId === entity?.id && r.status === 'pending').length : 0
 
   const links = items.map(([to, label, I]) => (
     <NavLink key={to} to={to} end={to === '/app'} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}>
       <I size={18} /> {label}
-      {label === 'Messages' && convCount > 0 && <span className="count">{convCount}</span>}
+      {label === 'Messages' && unreadTotal > 0 && <span className="count">{unreadTotal > 99 ? '99+' : unreadTotal}</span>}
       {label === 'Home' && reqCount > 0 && <span className="count">{reqCount}</span>}
     </NavLink>
   ))

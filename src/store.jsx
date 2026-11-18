@@ -8,6 +8,7 @@ const KEY = 'aakar-demo-v2'
 // Sample contacts (people from demo.js) have no account behind them.
 // false = they stay silent. true = they send made-up replies like before.
 const FAKE_REPLIES = false
+
 const Ctx = createContext(null)
 
 const initial = () => ({
@@ -24,10 +25,12 @@ const initial = () => ({
   conversations: demo.seedConversations,
   saved: { 'u-inv': ['s4'] },
   readNotifs: {},
+  readMessages: {},
 })
 
 // TEMPORARY demo shortcut: ?as=student (etc.) signs in as that demo account on load.
 const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', organization: 'u-org', admin: 'u-admin' }
+
 function load() {
   let st = initial()
   try {
@@ -42,8 +45,13 @@ function load() {
 const uid = (p) => p + Math.random().toString(36).slice(2, 9)
 const nowISO = () => new Date().toISOString()
 const notOlderThanADay = (iso) => new Date(iso) > new Date(new Date().getTime() - 864e5)
+
 export const initialsOf = (name = '') => name.replace(/^(Dr\.|Er\.|CA)\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || 'A'
+
 const pickColor = (s) => demo.COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % demo.COLORS.length]
+
+// How many messages from the other person I have not seen yet (real, saved messages only).
+export const unreadOf = (c) => c.messages.filter((m) => m.from === 'peer' && m.rid && !m.seenAt).length
 
 /* ---------- Supabase helpers ---------- */
 
@@ -57,6 +65,7 @@ const fromRow = (row, prev = {}) => ({
   initials: initialsOf(row.full_name),
   color: pickColor(row.full_name),
   submittedAt: row.created_at,
+  lastSeenAt: row.last_seen_at || null,
   rejectReason: row.reject_reason || undefined,
   profile: row.details?.profile,
   raw: row.details?.raw,
@@ -97,7 +106,16 @@ const ROLE_LABEL = { investor: 'Investor', startup: 'Startup founder', student: 
 // Describe a real person (a profiles row) the way the Messages page expects a chat peer.
 const peerFromRow = (row) => {
   const u = fromRow(row)
-  return { name: u.name, initials: u.initials, color: u.color, subtitle: ROLE_LABEL[row.role] || 'Member', kind: KIND[row.role] || 'professional', refId: 'r-' + row.id.slice(0, 8), userId: row.id }
+  return {
+    name: u.name,
+    initials: u.initials,
+    color: u.color,
+    subtitle: ROLE_LABEL[row.role] || 'Member',
+    kind: KIND[row.role] || 'professional',
+    refId: 'r-' + row.id.slice(0, 8),
+    userId: row.id,
+    lastSeenAt: row.last_seen_at || null,
+  }
 }
 
 // If the person you are messaging is a real account, return their Supabase user id.
@@ -119,20 +137,88 @@ const challFromRow = (c, responses = [], profileById = {}) => ({
   }),
 })
 
+// Turn a row from the Supabase "sessions" table into the session object the pages already use.
+// regs = the registrations I am allowed to see (my own as a student, everyone's on my own sessions as host).
+// taken = total seats taken (from session_seat_counts), so seats left is right for every viewer.
+const sessFromRow = (r, regs = [], taken) => ({
+  id: r.id,
+  remote: true,
+  hostId: eid(r.host_id),
+  title: r.title,
+  keyword: r.keyword,
+  date: r.starts_at,
+  duration: r.duration_min,
+  seats: r.seats,
+  platform: r.platform,
+  mode: r.platform,
+  desc: r.description,
+  isPaid: r.is_paid,
+  price: r.price_npr,
+  payMethod: r.pay_method,
+  payAccount: r.pay_account,
+  registered: regs.map((x) => eid(x.student_id)),
+  regs: regs.map((x) => ({ studentId: x.student_id, payStatus: x.pay_status })),
+  taken: taken ?? regs.length,
+})
+
 // Save one message to Supabase (and create the conversation first if needed).
-async function sendRemote({ setState, toast, convId, remoteId, remoteUserId, meId, text }) {
+async function sendRemote({ setState, toast, convId, remoteId, remoteUserId, meId, text, localId }) {
+  // Mark the bubble as failed (instead of leaving it on "Sending…" forever) and show why.
+  const fail = (reason) => {
+    console.error('Message not sent:', reason)
+    toast('Message not sent: ' + reason)
+    setState((s) => ({
+      ...s,
+      conversations: s.conversations.map((c) => (c.id === convId
+        ? { ...c, messages: c.messages.map((m) => (m.localId === localId ? { ...m, status: 'failed' } : m)) }
+        : c)),
+    }))
+  }
+
   try {
+    // The app can think you are signed in while Supabase has no session (or a different account's session).
+    // Then every insert is rejected by row-level security, so catch it here with a clear message.
+    const { data: sess } = await supabase.auth.getSession()
+    if (!sess?.session) { fail('Your login session expired. Log out and log in again.'); return }
+    if (sess.session.user.id !== meId) { fail('You are signed in as a different account in another tab. Log out and log in again.'); return }
+
     let rid = remoteId
+
     if (!rid) {
       const { data, error } = await supabase.rpc('start_conversation', { peer_id: remoteUserId })
-      if (error) { toast(error.message); return }
+      if (error) { fail(error.message); return }
       rid = data
       setState((s) => ({ ...s, conversations: s.conversations.map((c) => (c.id === convId ? { ...c, remoteId: rid } : c)) }))
     }
-    const { error } = await supabase.from('messages').insert({ conversation_id: rid, sender_id: meId, body: text })
-    if (error) toast('Message not sent: ' + error.message)
-  } catch {
-    toast('Message not sent. Check your connection.')
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({ conversation_id: rid, sender_id: meId, body: text })
+      .select()
+      .single()
+
+    if (error) {
+      fail(error.message)
+      return
+    }
+
+    setState((s) => ({
+      ...s,
+      conversations: s.conversations.map((c) =>
+        c.id === convId
+          ? {
+            ...c,
+            messages: c.messages.map((m) =>
+              m.localId === localId
+                ? { ...m, rid: data.id, at: data.created_at, status: 'sent', deliveredAt: m.deliveredAt || data.delivered_at, seenAt: m.seenAt || data.seen_at }
+                : m
+            ),
+          }
+          : c
+      ),
+    }))
+  } catch (err) {
+    fail(err?.message || 'Check your connection.')
   }
 }
 
@@ -173,6 +259,7 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(state)) } catch { /* ignore */ }
   }, [state])
+
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
   const toast = useCallback((msg) => {
@@ -183,47 +270,62 @@ export function StoreProvider({ children }) {
 
   const user = state.users.find((u) => u.id === state.currentUserId) || null
 
-  // For real (Supabase) accounts: load other members and past chats, then listen for new messages live.
+  // For real (Supabase) accounts: keep "last seen" fresh.
   const meId = user?.remote ? user.id : null
-  // Track online members using Supabase Presence.
+
   useEffect(() => {
-    if (!meId) {
-      setOnlineUsers([])
-      return
+    if (!meId) return undefined
+
+    const updateLastSeen = async () => {
+      if (document.visibilityState !== 'visible') return
+      const { error } = await supabase.rpc('touch_last_seen')
+      if (error) console.error('Last-seen update failed:', error.message)
     }
 
-    let alive = true
+    updateLastSeen()
+    const interval = setInterval(updateLastSeen, 60_000)
+    window.addEventListener('focus', updateLastSeen)
+    document.addEventListener('visibilitychange', updateLastSeen)
 
-    const presenceChannel = supabase
-      .channel('aakar-online-members', {
-        config: {
-          presence: {
-            key: meId,
-          },
-        },
-      })
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', updateLastSeen)
+      document.removeEventListener('visibilitychange', updateLastSeen)
+    }
+  }, [meId])
+
+  // Live online status with Supabase Presence (no tables or SQL needed).
+  useEffect(() => {
+    if (!meId) return undefined
+
+    const channel = supabase.channel('online-users', { config: { presence: { key: meId } } })
+
+    channel
       .on('presence', { event: 'sync' }, () => {
-        if (!alive) return
-
-        const presenceState = presenceChannel.presenceState()
-
-        setOnlineUsers(Object.keys(presenceState))
+        setOnlineUsers(Object.keys(channel.presenceState()))
+      })
+      .on('presence', { event: 'leave' }, ({ key }) => {
+        // The moment someone goes offline, show "Last seen just now" without waiting for a reload.
+        setState((s) => ({
+          ...s,
+          conversations: s.conversations.map((c) => (
+            c.remoteUserId === key || c.peer?.userId === key
+              ? { ...c, peer: { ...c.peer, lastSeenAt: nowISO() } }
+              : c
+          )),
+        }))
       })
       .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({
-            user_id: meId,
-            online_at: new Date().toISOString(),
-          })
-        }
+        if (status === 'SUBSCRIBED') await channel.track({ at: nowISO() })
       })
 
     return () => {
-      alive = false
       setOnlineUsers([])
-      supabase.removeChannel(presenceChannel)
+      supabase.removeChannel(channel)
     }
   }, [meId])
+
+  // For real (Supabase) accounts: load other members and past chats, then listen for new messages live.
   useEffect(() => {
     if (!meId) return undefined
     let alive = true
@@ -234,7 +336,7 @@ export function StoreProvider({ children }) {
       remoteUserId: profile.id,
       ownerId: meId,
       peer: peerFromRow(profile),
-      messages: msgs.map((m) => ({ rid: m.id, from: m.sender_id === meId ? 'me' : 'peer', text: m.body, at: m.created_at })),
+      messages: msgs.map((m) => ({ rid: m.id, from: m.sender_id === meId ? 'me' : 'peer', text: m.body, at: m.created_at, deliveredAt: m.delivered_at, seenAt: m.seen_at })),
     })
 
     const mergeConvs = (list) => setState((s) => {
@@ -250,6 +352,9 @@ export function StoreProvider({ children }) {
 
     const loadAll = async () => {
       try {
+        // I am online now, so anything sent to me while I was away counts as delivered.
+        supabase.rpc('mark_all_delivered').then(({ error }) => { if (error) console.error('mark_all_delivered failed:', error.message) })
+
         const { data: profs } = await supabase.from('profiles').select('*').eq('status', 'approved')
         if (alive && profs) setState((s) => withRemote(s, profs))
 
@@ -258,6 +363,7 @@ export function StoreProvider({ children }) {
         const { data: reqs } = await supabase.from('mentorship_requests').select('*').order('created_at', { ascending: false })
         const { data: chs } = await supabase.from('challenges').select('*').order('created_at', { ascending: false })
         const { data: resps } = await supabase.from('challenge_responses').select('*').order('created_at', { ascending: true })
+
         if (alive && (reqs || chs)) {
           setState((s) => {
             const reqIds = new Set((reqs || []).map((r) => r.id))
@@ -270,32 +376,57 @@ export function StoreProvider({ children }) {
           })
         }
 
+        // Mentorship sessions, my registrations (hosts also see who registered), and seats taken
+        const { data: sess } = await supabase.from('sessions').select('*').order('starts_at', { ascending: true })
+        const { data: sessRegs } = await supabase.from('session_registrations').select('*')
+        const { data: seatCounts } = await supabase.rpc('session_seat_counts')
+
+        if (alive && sess) {
+          const takenBy = Object.fromEntries((seatCounts || []).map((c) => [c.session_id, Number(c.taken)]))
+          setState((s) => {
+            const sessIds = new Set(sess.map((x) => x.id))
+            return {
+              ...s,
+              sessions: [
+                ...sess.map((x) => sessFromRow(x, (sessRegs || []).filter((r) => r.session_id === x.id), takenBy[x.id])),
+                ...s.sessions.filter((x) => !sessIds.has(x.id)),
+              ],
+            }
+          })
+        }
+
         const { data: convs } = await supabase.from('conversations').select('*')
         if (!alive || !convs?.length) return
+
         const { data: msgs } = await supabase.from('messages').select('*').in('conversation_id', convs.map((c) => c.id)).order('created_at', { ascending: true })
         const otherIds = convs.map((c) => (c.user_a === meId ? c.user_b : c.user_a))
         const { data: others } = await supabase.from('profiles').select('*').in('id', otherIds)
         if (!alive) return
+
         const list = convs.map((c) => {
           const profile = (others || []).find((p) => p.id === (c.user_a === meId ? c.user_b : c.user_a))
           return profile ? toLocal(c, profile, (msgs || []).filter((m) => m.conversation_id === c.id)) : null
         }).filter(Boolean)
+
         mergeConvs(list)
       } catch { /* offline: keep what we already have */ }
     }
 
     const receive = async (m) => {
       if (m.sender_id === meId) return // my own messages are already on screen
+
       const known = stateRef.current.conversations.find((c) => c.remoteId === m.conversation_id)
       if (known) {
         setState((s) => ({
           ...s,
           conversations: s.conversations.map((c) => (c.remoteId !== m.conversation_id || c.messages.some((x) => x.rid === m.id)
             ? c
-            : { ...c, messages: [...c.messages, { rid: m.id, from: 'peer', text: m.body, at: m.created_at }] })),
+            : { ...c, messages: [...c.messages, { rid: m.id, from: 'peer', text: m.body, at: m.created_at, deliveredAt: m.delivered_at, seenAt: m.seen_at }] })),
         }))
+        supabase.rpc('mark_delivered', { conv_id: m.conversation_id }).then(({ error }) => { if (error) console.error('mark_delivered failed:', error.message) })
         return
       }
+
       try {
         const { data: conv } = await supabase.from('conversations').select('*').eq('id', m.conversation_id).single()
         if (!conv) return
@@ -304,10 +435,22 @@ export function StoreProvider({ children }) {
         if (!profile || !alive) return
         setState((s) => withRemote(s, [profile]))
         mergeConvs([toLocal(conv, profile, msgs || [m])])
+        supabase.rpc('mark_delivered', { conv_id: conv.id }).then(({ error }) => { if (error) console.error('mark_delivered failed:', error.message) })
       } catch { /* ignore */ }
     }
 
-    // Requests, challenges and responses: any change simply triggers a (debounced) reload.
+    // The other person received or read a message: update its ticks live.
+    const applyReceipt = (row) => {
+      if (!row?.id) return
+      setState((s) => ({
+        ...s,
+        conversations: s.conversations.map((c) => (c.remoteId !== row.conversation_id
+          ? c
+          : { ...c, messages: c.messages.map((m) => (m.rid === row.id ? { ...m, deliveredAt: row.delivered_at, seenAt: row.seen_at } : m)) })),
+      }))
+    }
+
+    // Requests, challenges, responses and sessions: any change simply triggers a (debounced) reload.
     let timer = null
     const reloadSoon = () => {
       clearTimeout(timer)
@@ -316,14 +459,20 @@ export function StoreProvider({ children }) {
 
     loadAll()
     syncRef.current = loadAll
+
     const channel = supabase
       .channel('live-' + meId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => receive(payload.new))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (payload) => applyReceipt(payload.new))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mentorship_requests' }, reloadSoon)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'challenges' }, reloadSoon)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'challenge_responses' }, reloadSoon)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, reloadSoon)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'session_registrations' }, reloadSoon)
       .subscribe()
+
     window.addEventListener('focus', loadAll)
+
     return () => {
       alive = false
       clearTimeout(timer)
@@ -338,6 +487,64 @@ export function StoreProvider({ children }) {
     const list = { investor: state.investors, student: state.students, startup: state.startups, professional: state.mentors, organization: state.organizations }[u.role]
     return list?.find((x) => x.id === u.refId) || null
   }, [state])
+
+  const refreshChats = useCallback(() => {
+    syncRef.current?.()
+  }, [])
+
+  // Try sending a failed message again.
+  const retryMessage = useCallback((convId, localId) => {
+    const s = stateRef.current
+    const conv = s.conversations.find((c) => c.id === convId)
+    const msg = conv?.messages.find((m) => m.localId === localId)
+    const me = s.users.find((u) => u.id === s.currentUserId)
+    if (!conv || !msg || !me?.remote || !conv.remoteUserId) return
+
+    setState((st) => ({
+      ...st,
+      conversations: st.conversations.map((c) => (c.id === convId
+        ? { ...c, messages: c.messages.map((m) => (m.localId === localId ? { ...m, status: 'sending' } : m)) }
+        : c)),
+    }))
+    sendRemote({ setState, toast, convId, remoteId: conv.remoteId, remoteUserId: conv.remoteUserId, meId: me.id, text: msg.text, localId })
+  }, [toast])
+
+  // Call when the person is looking at a chat: tells the sender their messages were read.
+  const markSeen = useCallback(async (convId) => {
+    const conv = stateRef.current.conversations.find((c) => c.id === convId)
+    if (!conv?.remoteId) return
+    const hasUnseen = conv.messages.some((m) => m.from === 'peer' && m.rid && !m.seenAt)
+    if (!hasUnseen) return
+
+    const { error } = await supabase.rpc('mark_seen', { conv_id: conv.remoteId })
+    if (error) { console.error('mark_seen failed:', error.message); return }
+
+    const at = nowISO()
+    setState((s) => ({
+      ...s,
+      conversations: s.conversations.map((c) => (c.id !== convId
+        ? c
+        : {
+          ...c,
+          messages: c.messages.map((m) => (m.from === 'peer' && m.rid && !m.seenAt
+            ? { ...m, seenAt: at, deliveredAt: m.deliveredAt || at }
+            : m)),
+        })),
+    }))
+  }, [])
+
+  // Unread count for each of my chats, and the total for the sidebar badge.
+  const unreadByConv = useMemo(() => {
+    const out = {}
+    state.conversations.forEach((c) => {
+      if (c.ownerId !== state.currentUserId) return
+      const n = unreadOf(c)
+      if (n > 0) out[c.id] = n
+    })
+    return out
+  }, [state.conversations, state.currentUserId])
+
+  const unreadTotal = useMemo(() => Object.values(unreadByConv).reduce((a, b) => a + b, 0), [unreadByConv])
 
   const api = useMemo(() => ({
     // Demo accounts are checked first (works offline). Everything else goes to Supabase.
@@ -363,7 +570,9 @@ export function StoreProvider({ children }) {
         return { error: 'Could not reach the server. Use a demo account instead.' }
       }
     },
+
     setCurrent(id) { setState((s) => ({ ...s, currentUserId: id })) },
+
     logout() {
       supabase.auth.signOut().catch(() => { })
       setState((s) => ({ ...s, currentUserId: null }))
@@ -377,6 +586,7 @@ export function StoreProvider({ children }) {
         const { data: res, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         if (!res.session) return { error: 'Supabase is asking for email confirmation. Turn off "Confirm email" in Supabase (Authentication, Sign In / Providers, Email).' }
+
         const row = {
           id: res.user.id, full_name: name, role, email,
           country: raw?.country ?? null, bio: raw?.bio ?? null,
@@ -385,6 +595,7 @@ export function StoreProvider({ children }) {
         }
         const { error: pErr } = await supabase.from('profiles').insert(row)
         if (pErr) { await supabase.auth.signOut(); return { error: pErr.message } }
+
         const u = fromRow({ ...row, status: 'pending', is_admin: false, created_at: nowISO() })
         setState((s) => ({ ...s, users: [...s.users.filter((x) => x.id !== u.id), u], currentUserId: u.id }))
         return { user: u }
@@ -429,6 +640,7 @@ export function StoreProvider({ children }) {
       })
       return {}
     },
+
     async reject(userId, reason) {
       const target = state.users.find((x) => x.id === userId)
       if (target?.remote) {
@@ -458,56 +670,85 @@ export function StoreProvider({ children }) {
       const targetId = found && found !== me.id ? found : undefined
       const existing = state.conversations.find((c) => c.ownerId === state.currentUserId && (targetId ? c.remoteUserId === targetId : c.peer.refId === peer.refId && c.peer.name === peer.name))
       if (existing) return existing.id
+
       const id = uid('cv')
       const conv = { id, ownerId: state.currentUserId, peer, remoteUserId: targetId, messages: opener ? [{ from: 'system', text: opener, at: nowISO() }] : [] }
       pending.current[id] = conv
       setState((s) => ({ ...s, conversations: [conv, ...s.conversations] }))
       return id
     },
+
     // kindHint is used when the conversation was created in this same tick.
     sendMessage(convId, text, kindHint) {
       const conv = state.conversations.find((c) => c.id === convId) || pending.current[convId]
       const me = state.users.find((u) => u.id === state.currentUserId)
-      setState((s) => ({ ...s, conversations: s.conversations.map((c) => (c.id === convId ? { ...c, messages: [...c.messages, { from: 'me', text, at: nowISO() }] } : c)) }))
-      if (conv?.remoteUserId && me?.remote) {
+      const localId = uid('m')
+      const isRemote = !!(conv?.remoteUserId && me?.remote)
+
+      setState((s) => ({
+        ...s,
+        conversations: s.conversations.map((c) =>
+          c.id === convId
+            ? { ...c, messages: [...c.messages, { localId, from: 'me', text, at: nowISO(), status: isRemote ? 'sending' : 'sent' }] }
+            : c
+        ),
+      }))
+
+      if (isRemote) {
         // Real person on the other side: save to Supabase, no fake reply.
-        sendRemote({ setState, toast, convId, remoteId: conv.remoteId, remoteUserId: conv.remoteUserId, meId: me.id, text })
+        sendRemote({ setState, toast, convId, remoteId: conv.remoteId, remoteUserId: conv.remoteUserId, meId: me.id, text, localId })
         return
       }
+
       // Two demo accounts talking in this browser: the other person finds the message in their chat
       // when they log in, and can answer it from there.
       if (conv && me && !me.remote && me.refId) {
         setState((s) => {
           const other = s.users.find((u) => !u.remote && u.id !== me.id && u.refId && u.refId === conv.peer.refId)
           if (!other) return s
+
           const lists = { investor: s.investors, student: s.students, startup: s.startups, professional: s.mentors, organization: s.organizations }
           const mine = lists[me.role]?.find((x) => x.id === me.refId)
           const subtitle = me.role === 'student' ? `Mentee · ${mine?.institution || ''}`
             : me.role === 'professional' ? `${mine?.title || ''}, ${mine?.company || ''}`
               : ROLE_LABEL[me.role] || 'Member'
+
           const incoming = { from: 'peer', text, at: nowISO() }
           const theirs = s.conversations.find((c) => c.ownerId === other.id && c.peer.refId === me.refId)
+
           if (theirs) {
             return { ...s, conversations: s.conversations.map((c) => (c.id === theirs.id ? { ...c, messages: [...c.messages, incoming] } : c)) }
           }
+
           const peer = { name: me.name, initials: me.initials, color: me.color, subtitle, kind: KIND[me.role] || 'professional', refId: me.refId }
           return { ...s, conversations: [{ id: uid('cv'), ownerId: other.id, peer, messages: [incoming] }, ...s.conversations] }
         })
       }
+
       const kind = conv?.peer.kind || kindHint
       if (!kind || !FAKE_REPLIES) return
+
       const pool = demo.autoReplies[kind] || demo.autoReplies.professional
       const reply = pool[(conv?.messages.filter((m) => m.from === 'peer').length || 0) % pool.length]
+
       timers.current.push(setTimeout(() => setTyping((t) => ({ ...t, [convId]: true })), 600))
       timers.current.push(setTimeout(() => {
         setTyping((t) => ({ ...t, [convId]: false }))
-        setState((s) => ({ ...s, conversations: s.conversations.map((c) => (c.id === convId ? { ...c, messages: [...c.messages, { from: 'peer', text: reply, at: nowISO() }] } : c)) }))
+        setState((s) => ({
+          ...s,
+          conversations: s.conversations.map((c) =>
+            c.id === convId
+              ? { ...c, messages: [...c.messages, { from: 'peer', text: reply, at: nowISO() }] }
+              : c
+          ),
+        }))
       }, 2200))
     },
 
     requestMentorship(studentId, mentorId, message) {
       const me = state.users.find((u) => u.id === state.currentUserId)
       const mentorUserId = state.mentors.find((m) => m.id === mentorId)?.userId
+
       if (me?.remote && mentorUserId) {
         // Real student and real mentor: the request is saved so the mentor receives it.
         ; (async () => {
@@ -519,10 +760,13 @@ export function StoreProvider({ children }) {
         })()
         return
       }
+
       setState((s) => ({ ...s, requests: [{ id: uid('r'), studentId, mentorId, message, status: 'pending', at: nowISO() }, ...s.requests] }))
     },
+
     respondRequest(reqId, status) {
       const real = state.requests.find((r) => r.id === reqId)
+
       if (real?.remote) {
         // The database function marks it, opens the chat and sends the student their welcome message.
         ; (async () => {
@@ -535,36 +779,103 @@ export function StoreProvider({ children }) {
         })()
         return
       }
+
       setState((s) => {
         const req = s.requests.find((r) => r.id === reqId)
         let conversations = s.conversations
+
         if (req && status === 'accepted') {
           const st = s.students.find((x) => x.id === req.studentId)
           const m = s.mentors.find((x) => x.id === req.mentorId)
           const proUser = s.users.find((u) => u.role === 'professional' && u.refId === req.mentorId)
           const stuUser = s.users.find((u) => u.role === 'student' && u.refId === req.studentId)
           const add = []
+
           // Message the mentor "sends" automatically the moment they accept.
           const welcome = `Hi ${(st?.name || 'there').split(' ')[0]}, I've accepted your mentorship request. Let's plan your first session.`
+
           if (proUser && st) add.push({ id: uid('cv'), ownerId: proUser.id, peer: { name: st.name, initials: st.initials, color: st.color, subtitle: `Mentee · ${st.institution}`, kind: 'student', refId: st.id }, messages: [{ from: 'peer', text: req.message, at: req.at }, { from: 'me', text: welcome, at: nowISO() }] })
+
           if (stuUser && m) add.push({ id: uid('cv'), ownerId: stuUser.id, peer: { name: m.name, initials: m.initials, color: m.color, subtitle: `${m.title}, ${m.company}`, kind: 'mentor', refId: m.id }, messages: [{ from: 'me', text: req.message, at: req.at }, { from: 'system', text: `${m.name} accepted your mentorship request.`, at: nowISO() }, { from: 'peer', text: welcome, at: nowISO() }] })
+
           conversations = [...add, ...conversations]
         }
+
         return { ...s, conversations, requests: s.requests.map((r) => (r.id === reqId ? { ...r, status } : r)) }
       })
     },
 
-    createSession(data) {
+    // Mentors host sessions. Real mentors save to Supabase; demo accounts stay in this browser.
+    // data.startsAt must be a real timestamp, e.g. new Date(`${date}T${time}:00+05:45`).toISOString()
+    // Returns the new session, or null if it could not be saved.
+    async createSession(data) {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+
+      if (me?.remote) {
+        const { data: row, error } = await supabase.from('sessions').insert({
+          title: data.title,
+          keyword: data.keyword,
+          starts_at: data.startsAt,
+          duration_min: Number(data.duration) || 60,
+          seats: Number(data.seats) || 50,
+          platform: data.platform ?? data.mode ?? 'Zoom',
+          description: data.desc || '',
+          is_paid: !!data.isPaid,
+          price_npr: data.isPaid ? Number(data.price) : null,
+          pay_method: data.isPaid ? data.payMethod : null,
+          pay_account: data.isPaid ? data.payAccount : null,
+        }).select().single()
+
+        if (error) { toast(error.message); return null }
+
+        const se = sessFromRow(row)
+        setState((s) => ({ ...s, sessions: [...s.sessions.filter((x) => x.id !== se.id), se] }))
+        return se
+      }
+
       const se = { id: uid('se'), registered: [], ...data }
       setState((s) => ({ ...s, sessions: [...s.sessions, se] }))
       return se
     },
-    toggleRegister(sessionId, studentId) {
-      setState((s) => ({ ...s, sessions: s.sessions.map((se) => (se.id !== sessionId ? se : { ...se, registered: se.registered.includes(studentId) ? se.registered.filter((x) => x !== studentId) : [...se.registered, studentId] })) }))
+
+    // Register for a session, or cancel the registration. (studentId is the student's platform record id.)
+    async toggleRegister(sessionId, studentId) {
+      const se = state.sessions.find((x) => x.id === sessionId)
+
+      if (se?.remote) {
+        const already = se.registered.includes(studentId)
+        const { error } = already
+          ? await supabase.from('session_registrations').delete().eq('session_id', sessionId).eq('student_id', meId)
+          : await supabase.rpc('register_session', { p_session: sessionId })
+        if (error) { toast(error.message); return false }
+        syncRef.current?.()
+        return true
+      }
+
+      setState((s) => ({ ...s, sessions: s.sessions.map((x) => (x.id !== sessionId ? x : { ...x, registered: x.registered.includes(studentId) ? x.registered.filter((y) => y !== studentId) : [...x.registered, studentId] })) }))
+      return true
+    },
+
+    // Student: "I have paid" for a paid session. The mentor then confirms it.
+    async claimPayment(sessionId, proof = null) {
+      const { error } = await supabase.rpc('claim_payment', { p_session: sessionId, p_proof: proof })
+      if (error) { toast(error.message); return }
+      toast('Payment marked. The mentor will confirm it.')
+      syncRef.current?.()
+    },
+
+    // Mentor: confirm that a student's payment arrived. studentUserId is the student's Supabase user id
+    // (it is in session.regs[].studentId).
+    async confirmPayment(sessionId, studentUserId) {
+      const { error } = await supabase.rpc('confirm_payment', { p_session: sessionId, p_student: studentUserId })
+      if (error) { toast(error.message); return }
+      toast('Payment confirmed.')
+      syncRef.current?.()
     },
 
     postChallenge(data) {
       const me = state.users.find((u) => u.id === state.currentUserId)
+
       if (me?.remote) {
         // Saved to Supabase so every member (mentors included) sees it.
         ; (async () => {
@@ -579,11 +890,14 @@ export function StoreProvider({ children }) {
         })()
         return
       }
+
       setState((s) => ({ ...s, challenges: [{ id: uid('c'), at: nowISO(), responses: [], ...data }, ...s.challenges] }))
     },
+
     respondChallenge(challengeId, responder, text, posterPeer) {
       const ch = state.challenges.find((c) => c.id === challengeId)
       const me = state.users.find((u) => u.id === state.currentUserId)
+
       if (ch?.remote && me?.remote) {
         // The database function saves the idea and delivers it to the poster as a chat message.
         ; (async () => {
@@ -596,6 +910,7 @@ export function StoreProvider({ children }) {
         })()
         return
       }
+
       setState((s) => {
         const conv = { id: uid('cv'), ownerId: s.currentUserId, peer: posterPeer, messages: [{ from: 'system', text: `Solution suggested on “${s.challenges.find((c) => c.id === challengeId)?.title}”`, at: nowISO() }, { from: 'me', text, at: nowISO() }] }
         return {
@@ -614,11 +929,16 @@ export function StoreProvider({ children }) {
       try { localStorage.removeItem(KEY) } catch { /* ignore */ }
       setState(initial())
     },
-  }), [state, toast])
+  }), [state, toast, meId])
 
   const value = {
     state,
     user,
+    refreshChats,
+    markSeen,
+    retryMessage,
+    unreadByConv,
+    unreadTotal,
     entity: entityOf(user),
     entityOf,
     typing,
@@ -626,6 +946,7 @@ export function StoreProvider({ children }) {
     toast,
     ...api,
   }
+
   return (
     <Ctx.Provider value={value}>
       {children}
@@ -641,10 +962,12 @@ export const useStore = () => useContext(Ctx)
 // Notifications for the signed-in user, derived from shared state.
 export function useNotifications() {
   const { state, user, entity } = useStore()
+
   return useMemo(() => {
     if (!user || !entity) return []
     const read = state.readNotifs[user.id] || []
     const out = []
+
     if (user.role === 'student') {
       state.sessions.filter((se) => entity.interests.includes(se.keyword) && notOlderThanADay(se.date)).forEach((se) => {
         const host = state.mentors.find((m) => m.id === se.hostId)
@@ -655,25 +978,30 @@ export function useNotifications() {
         out.push({ id: 'n-' + r.id, icon: 'check', text: `${m?.name} accepted your mentorship request`, sub: 'Start the conversation in Messages', to: '/app/messages', at: r.at })
       })
     }
+
     if (user.role === 'professional') {
       state.requests.filter((r) => r.mentorId === entity.id && r.status === 'pending').forEach((r) => {
         const st = state.students.find((x) => x.id === r.studentId)
         out.push({ id: 'n-' + r.id, icon: 'user', text: `${st?.name} requested mentorship`, sub: r.message.slice(0, 70) + '…', to: '/app', at: r.at })
       })
     }
+
     if (user.role === 'organization' || user.role === 'startup') {
       state.challenges.filter((c) => c.posterId === entity.id).forEach((c) => c.responses.forEach((r, i) => {
         out.push({ id: `n-${c.id}-${i}`, icon: 'bulb', text: `${r.name} suggested a solution`, sub: c.title, to: '/app/helpdesk', at: r.at })
       }))
     }
+
     if (user.role === 'startup') {
       state.conversations.filter((c) => c.ownerId === user.id && c.peer.kind === 'investor').forEach((c) => {
         out.push({ id: 'n-' + c.id, icon: 'chat', text: `${c.peer.name} messaged you`, sub: c.peer.subtitle, to: '/app/messages?c=' + c.id, at: c.messages.at(-1)?.at })
       })
     }
+
     if (user.role === 'investor') {
       state.startups.slice(0, 2).forEach((s) => out.push({ id: 'n-new-' + s.id, icon: 'rocket', text: `${s.name} matches your sectors`, sub: s.tagline.slice(0, 70), to: '/app/startups/' + s.id, at: nowISO() }))
     }
+
     return out.sort((a, b) => new Date(b.at) - new Date(a.at)).map((n) => ({ ...n, unread: !read.includes(n.id) }))
   }, [state, user, entity])
 }

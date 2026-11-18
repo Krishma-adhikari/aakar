@@ -625,3 +625,27 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .demo-link:hover { background: var(--paper); color: var(--primary); }
 .demo-link.on { background: var(--primary-50); color: var(--primary); }
 @media (max-width: 600px) { .demo-panel { left: 10px; right: 10px; width: auto; bottom: 10px; } .demo-fab { left: 12px; bottom: 12px; } }
+
+/* Chat layout and scrolling fix */
+.chat {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.chat-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-head,
+.chat-input {
+  flex-shrink: 0;
+}

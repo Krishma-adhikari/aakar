@@ -53,6 +53,26 @@ const pickColor = (s) => demo.COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0)
 // How many messages from the other person I have not seen yet (real, saved messages only).
 export const unreadOf = (c) => c.messages.filter((m) => m.from === 'peer' && m.rid && !m.seenAt).length
 
+/* ---------- Meeting link validation ---------- */
+
+// Only https links on these sites are accepted (the database enforces the same rule).
+const LINK_HOSTS = ['zoom.us', 'meet.google.com', 'teams.microsoft.com', 'teams.live.com']
+
+// Returns { ok: true, url } (url is '' when the box is empty) or { ok: false, error }.
+export function validateMeetingLink(raw) {
+  const v = (raw || '').trim()
+  if (!v) return { ok: true, url: '' }
+  let u
+  try { u = new URL(v) } catch { return { ok: false, error: 'That doesn’t look like a link. Paste the full address, starting with https://' } }
+  if (u.protocol !== 'https:') return { ok: false, error: 'The link must start with https://' }
+  if (u.username || u.password) return { ok: false, error: 'This link is not allowed. Paste the plain meeting link.' }
+  const h = u.hostname.toLowerCase()
+  if (!LINK_HOSTS.some((d) => h === d || h.endsWith('.' + d))) {
+    return { ok: false, error: 'Only Zoom, Google Meet or Microsoft Teams links are accepted (zoom.us, meet.google.com, teams.microsoft.com, teams.live.com).' }
+  }
+  return { ok: true, url: u.toString() }
+}
+
 /* ---------- Supabase helpers ---------- */
 
 // Turn a row from the Supabase "profiles" table into the user object the app already uses.
@@ -140,7 +160,8 @@ const challFromRow = (c, responses = [], profileById = {}) => ({
 // Turn a row from the Supabase "sessions" table into the session object the pages already use.
 // regs = the registrations I am allowed to see (my own as a student, everyone's on my own sessions as host).
 // taken = total seats taken (from session_seat_counts), so seats left is right for every viewer.
-const sessFromRow = (r, regs = [], taken) => ({
+// link = the meeting link, only present when I am allowed to read it (host, or a registered student who may join).
+const sessFromRow = (r, regs = [], taken, link = null) => ({
   id: r.id,
   remote: true,
   hostId: eid(r.host_id),
@@ -159,6 +180,7 @@ const sessFromRow = (r, regs = [], taken) => ({
   registered: regs.map((x) => eid(x.student_id)),
   regs: regs.map((x) => ({ studentId: x.student_id, payStatus: x.pay_status })),
   taken: taken ?? regs.length,
+  meetingLink: link || null,
 })
 
 // Save one message to Supabase (and create the conversation first if needed).
@@ -380,15 +402,19 @@ export function StoreProvider({ children }) {
         const { data: sess } = await supabase.from('sessions').select('*').order('starts_at', { ascending: true })
         const { data: sessRegs } = await supabase.from('session_registrations').select('*')
         const { data: seatCounts } = await supabase.rpc('session_seat_counts')
+        // Meeting links: row-level security returns ONLY the links I am allowed to read
+        // (my own sessions as host, or sessions I may join as a student).
+        const { data: privRows } = await supabase.from('session_private').select('session_id, meeting_link')
 
         if (alive && sess) {
           const takenBy = Object.fromEntries((seatCounts || []).map((c) => [c.session_id, Number(c.taken)]))
+          const linkBy = Object.fromEntries((privRows || []).map((p) => [p.session_id, p.meeting_link]))
           setState((s) => {
             const sessIds = new Set(sess.map((x) => x.id))
             return {
               ...s,
               sessions: [
-                ...sess.map((x) => sessFromRow(x, (sessRegs || []).filter((r) => r.session_id === x.id), takenBy[x.id])),
+                ...sess.map((x) => sessFromRow(x, (sessRegs || []).filter((r) => r.session_id === x.id), takenBy[x.id], linkBy[x.id])),
                 ...s.sessions.filter((x) => !sessIds.has(x.id)),
               ],
             }
@@ -469,6 +495,7 @@ export function StoreProvider({ children }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'challenge_responses' }, reloadSoon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, reloadSoon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'session_registrations' }, reloadSoon)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'session_private' }, reloadSoon)
       .subscribe()
 
     window.addEventListener('focus', loadAll)
@@ -807,11 +834,16 @@ export function StoreProvider({ children }) {
 
     // Mentors host sessions. Real mentors save to Supabase; demo accounts stay in this browser.
     // data.startsAt must be a real timestamp, e.g. new Date(`${date}T${time}:00+05:45`).toISOString()
+    // data.meetingLink is optional (real accounts only). It is saved in the private table, never in "sessions".
     // Returns the new session, or null if it could not be saved.
     async createSession(data) {
       const me = state.users.find((u) => u.id === state.currentUserId)
 
       if (me?.remote) {
+        // Check the link first, so a bad link never creates half a session.
+        const v = validateMeetingLink(data.meetingLink)
+        if (!v.ok) { toast(v.error); return null }
+
         const { data: row, error } = await supabase.from('sessions').insert({
           title: data.title,
           keyword: data.keyword,
@@ -828,14 +860,44 @@ export function StoreProvider({ children }) {
 
         if (error) { toast(error.message); return null }
 
-        const se = sessFromRow(row)
+        let savedLink = null
+        if (v.url) {
+          const { error: lErr } = await supabase.from('session_private').insert({ session_id: row.id, meeting_link: v.url })
+          if (lErr) toast('Session created, but the meeting link was not saved. Add it from the session card.')
+          else savedLink = v.url
+        }
+
+        const se = sessFromRow(row, [], undefined, savedLink)
         setState((s) => ({ ...s, sessions: [...s.sessions.filter((x) => x.id !== se.id), se] }))
         return se
       }
 
-      const se = { id: uid('se'), registered: [], ...data }
+      // Demo accounts: no private links, everything works as before.
+      const rest = { ...data }
+      delete rest.meetingLink
+      const se = { id: uid('se'), registered: [], ...rest }
       setState((s) => ({ ...s, sessions: [...s.sessions, se] }))
       return se
+    },
+
+    // Host: add or change the meeting link of one of my sessions. Returns true when saved.
+    async setMeetingLink(sessionId, link) {
+      const se = state.sessions.find((x) => x.id === sessionId)
+      if (!se?.remote) return false
+
+      const v = validateMeetingLink(link)
+      if (!v.ok) { toast(v.error); return false }
+      if (!v.url) { toast('Paste a meeting link first.'); return false }
+
+      const { error } = await supabase.from('session_private').upsert({ session_id: sessionId, meeting_link: v.url }, { onConflict: 'session_id' })
+      if (error) {
+        toast(error.code === '23514' ? 'That link is not accepted. Use a Zoom, Google Meet or Teams link.' : error.message)
+        return false
+      }
+
+      setState((s) => ({ ...s, sessions: s.sessions.map((x) => (x.id === sessionId ? { ...x, meetingLink: v.url } : x)) }))
+      toast('Meeting link saved.')
+      return true
     },
 
     // Register for a session, or cancel the registration. (studentId is the student's platform record id.)

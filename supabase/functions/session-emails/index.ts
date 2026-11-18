@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.119.0'
 
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically into every Edge Function.
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -164,10 +164,11 @@ async function sendMail(to: string, toName: string, mail: { subject: string; htm
       textContent: mail.text,
     }),
   })
-  // Status only. Never log the address, the body or the link.
-  if (!res.ok) throw new Error(`Brevo responded ${res.status}`)
+  if (!res.ok) {
+  const errorText = await res.text()
+  throw new Error(`Brevo responded ${res.status}: ${errorText}`)
 }
-
+}
 /* ---------- data + idempotent claiming ---------- */
 
 type Col = 'email_registered_at' | 'email_link_at' | 'email_reminder_at'

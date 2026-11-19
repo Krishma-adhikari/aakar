@@ -249,7 +249,7 @@ export function StudentSessions() {
 }
 
 export function Mentors() {
-  const { state, user, entity, requestMentorship, toast } = useStore()
+  const { state, user, entity, startChat, requestMentorship, toast } = useStore()
   const nav = useNavigate()
   const [only, setOnly] = useState(true)
   const [asking, setAsking] = useState(null)
@@ -281,7 +281,10 @@ export function Mentors() {
               <p className="small" style={{ color: 'var(--ink-2)' }}>{m.bio}</p>
               <div className="row wrap" style={{ gap: 6 }}>{m.fields.map((f) => <span key={f} className={`chip ${common.includes(f) ? 'chip-match' : ''}`}>{common.includes(f) && <Check size={12} />} {f}</span>)}</div>
               <div className="row xs muted" style={{ gap: 14 }}><span className="row" style={{ gap: 4 }}><Star size={13} color="var(--gold)" fill="var(--gold)" /> {m.rating}</span><span>{m.mentees} mentees</span><span>{m.hours} hrs/month</span></div>
-              {req?.status === 'accepted' ? <button className="btn btn-success btn-block" onClick={() => nav(conv ? '/app/messages?c=' + conv.id : '/app/messages')}><MessageCircle size={16} /> Accepted · Open chat</button>
+              {req?.status === 'accepted' ? <button className="btn btn-success btn-block" onClick={() => {
+                const id = conv ? conv.id : startChat({ name: m.name, initials: m.initials, color: m.color, subtitle: `${m.title}, ${m.company}`, kind: 'mentor', refId: m.id, userId: m.userId })
+                nav('/app/messages?c=' + id)
+              }}><MessageCircle size={16} /> Accepted · Open chat</button>
                 : req ? <button className="btn btn-soft btn-block" disabled><Clock size={16} /> Request {req.status}</button>
                   : <button className="btn btn-dark btn-block" onClick={() => { setAsking(m); setMsg(`Namaste ${m.name.replace(/^(Dr\.|Er\.|CA)\s+/, '').split(' ')[0]}, I’m ${entity.name.split(' ')[0]} from ${entity.institution}. ${entity.goal || ''} I’d be grateful for your guidance.`) }}>Request mentorship</button>}
             </div>

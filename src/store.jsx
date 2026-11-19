@@ -25,7 +25,8 @@ const initial = () => ({
   conversations: demo.seedConversations,
   saved: { 'u-inv': ['s4'] },
   readNotifs: {},
-  readMessages: {},
+  readMessages: {}, // { [userId]: [ids of demo messages already read] }
+  blocked: {}, // { [userId]: [peer refIds (demo) or user ids] }
 })
 
 // TEMPORARY demo shortcut: ?as=student (etc.) signs in as that demo account on load.
@@ -45,13 +46,31 @@ function load() {
 const uid = (p) => p + Math.random().toString(36).slice(2, 9)
 const nowISO = () => new Date().toISOString()
 const notOlderThanADay = (iso) => new Date(iso) > new Date(new Date().getTime() - 864e5)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// A prize is a positive whole number, otherwise there is no prize.
+const normPrize = (v) => {
+  const n = Number(v)
+  return Number.isInteger(n) && n > 0 ? n : null
+}
 
 export const initialsOf = (name = '') => name.replace(/^(Dr\.|Er\.|CA)\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || 'A'
 
 const pickColor = (s) => demo.COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % demo.COLORS.length]
 
-// How many messages from the other person I have not seen yet (real, saved messages only).
-export const unreadOf = (c) => c.messages.filter((m) => m.from === 'peer' && m.rid && !m.seenAt).length
+// How many messages from the other person I have not seen yet.
+// Real messages have a rid. Demo messages that have an id are counted unless they are in `read` (a Set).
+// Old seed messages without an id are treated as already read.
+export const unreadOf = (c, read) => c.messages.filter((m) => m.from === 'peer' && !m.seenAt && (m.rid || (read && m.id && !read.has(m.id)))).length
+
+// Simulated online status for sample contacts: about one in three is "Online",
+// the others get a stable "Last seen" time (it moves in 10 minute steps).
+export function demoPresence(peer) {
+  const key = String(peer?.refId || peer?.name || '')
+  const h = [...key].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 100003, 7)
+  const bucket = Math.floor(Date.now() / 600000) * 600000
+  return { online: h % 3 === 0, lastSeenAt: new Date(bucket - ((h % 170) + 10) * 60000).toISOString() }
+}
 
 /* ---------- Meeting link validation ---------- */
 
@@ -150,6 +169,7 @@ const reqFromRow = (r) => ({ id: r.id, studentId: eid(r.student_id), mentorId: e
 const challFromRow = (c, responses = [], profileById = {}) => ({
   id: c.id, remote: true, posterType: c.poster_type, posterId: eid(c.poster_id), title: c.title, category: c.category, urgency: c.urgency,
   tags: c.tags || [], desc: c.description, at: c.created_at,
+  prize: c.prize_amount ?? null,
   responses: responses.map((r) => {
     const p = profileById[r.responder_id]
     const u = p ? fromRow(p) : { name: 'Member', initials: 'M', color: '#334155' }
@@ -220,7 +240,9 @@ async function sendRemote({ setState, toast, convId, remoteId, remoteUserId, meI
       .single()
 
     if (error) {
-      fail(error.message)
+      // A blocked person fails the row-level security rule: show a friendly message instead.
+      const rls = error.code === '42501' || /row-level security/i.test(error.message || '')
+      fail(rls ? 'this person is not accepting messages.' : error.message)
       return
     }
 
@@ -242,6 +264,46 @@ async function sendRemote({ setState, toast, convId, remoteId, remoteUserId, meI
   } catch (err) {
     fail(err?.message || 'Check your connection.')
   }
+}
+
+// Demo to demo: put a message from `me` into the other demo account's chat.
+// If they have no chat with me (for example because they deleted it) a new one is created
+// that holds only this message. `intro` is an optional system line shown before it.
+function demoDeliver(s, me, other, text, srcId, intro) {
+  const lists = { investor: s.investors, student: s.students, startup: s.startups, professional: s.mentors, organization: s.organizations }
+  const mine = lists[me.role]?.find((x) => x.id === me.refId)
+  const subtitle = me.role === 'student' ? `Mentee · ${mine?.institution || ''}`
+    : me.role === 'professional' ? `${mine?.title || ''}, ${mine?.company || ''}`
+      : ROLE_LABEL[me.role] || 'Member'
+
+  const at = nowISO()
+  const incoming = { id: uid('m'), srcId, from: 'peer', text, at }
+  const add = intro ? [{ from: 'system', text: intro, at }, incoming] : [incoming]
+  // Match by refId, or by name (sample chats may use a different refId for the same person), so no second chat is created.
+  const theirs = s.conversations.find((c) =>
+    c.ownerId === other.id &&
+    (
+      c.remoteUserId === me.id ||
+      c.peer?.userId === me.id ||
+      (c.peer?.refId === me.refId && me.refId) ||
+      c.peer?.name === me.name
+    )
+  )
+
+  if (theirs) {
+    return { ...s, conversations: s.conversations.map((c) => (c.id === theirs.id ? { ...c, messages: [...c.messages, ...add] } : c)) }
+  }
+
+  const peer = {
+    name: me.name,
+    initials: me.initials,
+    color: me.color,
+    subtitle,
+    kind: KIND[me.role] || 'professional',
+    refId: me.refId,
+    userId: me.id
+  }
+  return { ...s, conversations: [{ id: uid('cv'), ownerId: other.id, peer, messages: add }, ...s.conversations] }
 }
 
 // Turn an approved registration into a platform record (startup listing, mentor profile, ...)
@@ -271,12 +333,14 @@ export function StoreProvider({ children }) {
   const [state, setState] = useState(load)
   const [typing, setTyping] = useState({})
   const [onlineUsers, setOnlineUsers] = useState([])
+  const [blockedRemote, setBlockedRemote] = useState([]) // user ids I blocked (from Supabase)
   const [toasts, setToasts] = useState([])
   const timers = useRef([])
   const stateRef = useRef(state)
   stateRef.current = state
   const pending = useRef({}) // conversations created in this same tick, before state updates
   const syncRef = useRef(null) // reloads shared data from Supabase (set while a real user is signed in)
+  const clearsRef = useRef({}) // { [remote conversation id]: cleared_at } for chats I deleted
 
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(state)) } catch { /* ignore */ }
@@ -288,6 +352,16 @@ export function StoreProvider({ children }) {
     const id = uid('t')
     setToasts((t) => [...t, { id, msg }])
     timers.current.push(setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200))
+  }, [])
+
+  // Change one demo message wherever it is. `patch` is an object or a function (message) => object.
+  const patchMsg = useCallback((id, patch) => {
+    setState((s) => ({
+      ...s,
+      conversations: s.conversations.map((c) => (c.messages.some((m) => m.id === id)
+        ? { ...c, messages: c.messages.map((m) => (m.id === id ? { ...m, ...(typeof patch === 'function' ? patch(m) : patch) } : m)) }
+        : c)),
+    }))
   }, [])
 
   const user = state.users.find((u) => u.id === state.currentUserId) || null
@@ -361,15 +435,19 @@ export function StoreProvider({ children }) {
       messages: msgs.map((m) => ({ rid: m.id, from: m.sender_id === meId ? 'me' : 'peer', text: m.body, at: m.created_at, deliveredAt: m.delivered_at, seenAt: m.seen_at })),
     })
 
-    const mergeConvs = (list) => setState((s) => {
+    // `hidden` = remote conversation ids I deleted that have nothing new since.
+    const mergeConvs = (list, hidden = []) => setState((s) => {
+      const base = s.conversations.filter((c) => !(c.ownerId === meId && c.remoteId && hidden.includes(c.remoteId)))
       const matched = new Set()
       const merged = list.map((n) => {
-        const old = s.conversations.find((c) => c.ownerId === meId && ((c.remoteId && c.remoteId === n.remoteId) || (!c.remoteId && c.remoteUserId && c.remoteUserId === n.remoteUserId)))
+        const old = base.find((c) => c.ownerId === meId && ((c.remoteId && c.remoteId === n.remoteId) || (!c.remoteId && c.remoteUserId && c.remoteUserId === n.remoteUserId)))
         if (!old) return n
         matched.add(old.id)
-        return { ...n, id: old.id, messages: [...old.messages.filter((m) => m.from === 'system'), ...n.messages] }
+        const clr = clearsRef.current[n.remoteId]
+        const keepSystem = old.messages.filter((m) => m.from === 'system' && (!clr || new Date(m.at) > new Date(clr)))
+        return { ...n, id: old.id, messages: [...keepSystem, ...n.messages] }
       })
-      return { ...s, conversations: [...merged, ...s.conversations.filter((c) => !matched.has(c.id))] }
+      return { ...s, conversations: [...merged, ...base.filter((c) => !matched.has(c.id))] }
     })
 
     const loadAll = async () => {
@@ -379,6 +457,12 @@ export function StoreProvider({ children }) {
 
         const { data: profs } = await supabase.from('profiles').select('*').eq('status', 'approved')
         if (alive && profs) setState((s) => withRemote(s, profs))
+
+        // People I blocked, and chats I deleted (and when).
+        const { data: blks } = await supabase.from('blocks').select('blocked_id').eq('blocker_id', meId)
+        if (alive && blks) setBlockedRemote(blks.map((b) => b.blocked_id))
+        const { data: clrs } = await supabase.from('conversation_clears').select('conversation_id, cleared_at').eq('user_id', meId)
+        if (clrs) clearsRef.current = Object.fromEntries(clrs.map((c) => [c.conversation_id, c.cleared_at]))
 
         // Mentorship requests and help-desk challenges shared between real members
         const profileById = Object.fromEntries((profs || []).map((p) => [p.id, p]))
@@ -429,17 +513,26 @@ export function StoreProvider({ children }) {
         const { data: others } = await supabase.from('profiles').select('*').in('id', otherIds)
         if (!alive) return
 
+        // Deleted chats: hide messages older than my cleared_at, and hide the chat if nothing is newer.
+        const clr = clearsRef.current
+        const hidden = []
         const list = convs.map((c) => {
           const profile = (others || []).find((p) => p.id === (c.user_a === meId ? c.user_b : c.user_a))
-          return profile ? toLocal(c, profile, (msgs || []).filter((m) => m.conversation_id === c.id)) : null
+          if (!profile) return null
+          const visible = (msgs || []).filter((m) => m.conversation_id === c.id && (!clr[c.id] || new Date(m.created_at) > new Date(clr[c.id])))
+          if (clr[c.id] && visible.length === 0) { hidden.push(c.id); return null }
+          return toLocal(c, profile, visible)
         }).filter(Boolean)
 
-        mergeConvs(list)
+        mergeConvs(list, hidden)
       } catch { /* offline: keep what we already have */ }
     }
 
     const receive = async (m) => {
       if (m.sender_id === meId) return // my own messages are already on screen
+
+      const clr = clearsRef.current[m.conversation_id]
+      if (clr && new Date(m.created_at) <= new Date(clr)) return // older than my delete
 
       const known = stateRef.current.conversations.find((c) => c.remoteId === m.conversation_id)
       if (known) {
@@ -453,14 +546,16 @@ export function StoreProvider({ children }) {
         return
       }
 
+      // Not in my list (new chat, or one I deleted): load it again. A deleted chat comes back with only the new messages.
       try {
         const { data: conv } = await supabase.from('conversations').select('*').eq('id', m.conversation_id).single()
         if (!conv) return
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', conv.user_a === meId ? conv.user_b : conv.user_a).single()
         const { data: msgs } = await supabase.from('messages').select('*').eq('conversation_id', conv.id).order('created_at', { ascending: true })
         if (!profile || !alive) return
+        const visible = (msgs || [m]).filter((x) => !clr || new Date(x.created_at) > new Date(clr))
         setState((s) => withRemote(s, [profile]))
-        mergeConvs([toLocal(conv, profile, msgs || [m])])
+        mergeConvs([toLocal(conv, profile, visible)])
         supabase.rpc('mark_delivered', { conv_id: conv.id }).then(({ error }) => { if (error) console.error('mark_delivered failed:', error.message) })
       } catch { /* ignore */ }
     }
@@ -504,6 +599,8 @@ export function StoreProvider({ children }) {
       alive = false
       clearTimeout(timer)
       syncRef.current = null
+      setBlockedRemote([])
+      clearsRef.current = {}
       window.removeEventListener('focus', loadAll)
       supabase.removeChannel(channel)
     }
@@ -538,8 +635,29 @@ export function StoreProvider({ children }) {
 
   // Call when the person is looking at a chat: tells the sender their messages were read.
   const markSeen = useCallback(async (convId) => {
-    const conv = stateRef.current.conversations.find((c) => c.id === convId)
-    if (!conv?.remoteId) return
+    const s0 = stateRef.current
+    const conv = s0.conversations.find((c) => c.id === convId)
+    if (!conv) return
+
+    // Demo chat: remember what I have read, and show "Seen" on the other demo account's messages.
+    if (!conv.remoteId && !conv.remoteUserId) {
+      const me = s0.currentUserId
+      const read = new Set(s0.readMessages?.[me] || [])
+      const fresh = conv.messages.filter((m) => m.from === 'peer' && m.id && !read.has(m.id))
+      if (!fresh.length) return
+      const at = nowISO()
+      const srcIds = new Set(fresh.map((m) => m.srcId).filter(Boolean))
+      setState((s) => ({
+        ...s,
+        readMessages: { ...s.readMessages, [me]: [...new Set([...(s.readMessages?.[me] || []), ...fresh.map((m) => m.id)])] },
+        conversations: s.conversations.map((c) => (c.messages.some((m) => m.from === 'me' && srcIds.has(m.id))
+          ? { ...c, messages: c.messages.map((m) => (m.from === 'me' && srcIds.has(m.id) ? { ...m, deliveredAt: m.deliveredAt || at, seenAt: at } : m)) }
+          : c)),
+      }))
+      return
+    }
+
+    if (!conv.remoteId) return
     const hasUnseen = conv.messages.some((m) => m.from === 'peer' && m.rid && !m.seenAt)
     if (!hasUnseen) return
 
@@ -560,18 +678,25 @@ export function StoreProvider({ children }) {
     }))
   }, [])
 
-  // Unread count for each of my chats, and the total for the sidebar badge.
+  // Unread count for each of my chats (real and demo), and the total for the sidebar badge.
   const unreadByConv = useMemo(() => {
     const out = {}
+    const read = new Set(state.readMessages?.[state.currentUserId] || [])
     state.conversations.forEach((c) => {
       if (c.ownerId !== state.currentUserId) return
-      const n = unreadOf(c)
+      const n = unreadOf(c, read)
       if (n > 0) out[c.id] = n
     })
     return out
-  }, [state.conversations, state.currentUserId])
+  }, [state.conversations, state.currentUserId, state.readMessages])
 
   const unreadTotal = useMemo(() => Object.values(unreadByConv).reduce((a, b) => a + b, 0), [unreadByConv])
+
+  // People I blocked: Supabase user ids (real) plus demo contact refIds saved in local state.
+  const blockedIds = useMemo(
+    () => [...new Set([...blockedRemote, ...(state.blocked?.[state.currentUserId] || [])])],
+    [blockedRemote, state.blocked, state.currentUserId]
+  )
 
   const api = useMemo(() => ({
     // Demo accounts are checked first (works offline). Everything else goes to Supabase.
@@ -695,11 +820,21 @@ export function StoreProvider({ children }) {
       const me = state.users.find((u) => u.id === state.currentUserId)
       const found = me?.remote ? peerUserId(state, peer) : undefined
       const targetId = found && found !== me.id ? found : undefined
-      const existing = state.conversations.find((c) => c.ownerId === state.currentUserId && (targetId ? c.remoteUserId === targetId : c.peer.refId === peer.refId && c.peer.name === peer.name))
-      if (existing) return existing.id
+      // A real person needs userId + lastSeenAt on the peer, otherwise the chat shows no online / last seen status.
+      const target = targetId ? state.users.find((u) => u.id === targetId) : null
+      const realPeer = targetId ? { ...peer, userId: targetId, lastSeenAt: peer.lastSeenAt || target?.lastSeenAt || null } : peer
+
+      const existing = state.conversations.find((c) => c.ownerId === state.currentUserId && (targetId ? c.remoteUserId === targetId : (c.peer.refId === peer.refId || c.peer.name === peer.name)))
+      if (existing) {
+        // Chats saved before this fix may lack the fields: add them.
+        if (targetId && !existing.peer?.userId) {
+          setState((s) => ({ ...s, conversations: s.conversations.map((c) => (c.id === existing.id ? { ...c, peer: { ...c.peer, ...realPeer } } : c)) }))
+        }
+        return existing.id
+      }
 
       const id = uid('cv')
-      const conv = { id, ownerId: state.currentUserId, peer, remoteUserId: targetId, messages: opener ? [{ from: 'system', text: opener, at: nowISO() }] : [] }
+      const conv = { id, ownerId: state.currentUserId, peer: realPeer, remoteUserId: targetId, messages: opener ? [{ from: 'system', text: opener, at: nowISO() }] : [] }
       pending.current[id] = conv
       setState((s) => ({ ...s, conversations: [conv, ...s.conversations] }))
       return id
@@ -709,6 +844,15 @@ export function StoreProvider({ children }) {
     sendMessage(convId, text, kindHint) {
       const conv = state.conversations.find((c) => c.id === convId) || pending.current[convId]
       const me = state.users.find((u) => u.id === state.currentUserId)
+
+      // I blocked this person: ignore the send.
+      const myBlocked = [...(state.blocked?.[state.currentUserId] || []), ...blockedRemote]
+      const peerKey = conv?.remoteUserId || conv?.peer?.userId || conv?.peer?.refId
+      if (conv && peerKey && myBlocked.includes(peerKey)) {
+        toast('You blocked this person. Unblock to send messages.')
+        return
+      }
+
       const localId = uid('m')
       const isRemote = !!(conv?.remoteUserId && me?.remote)
 
@@ -716,7 +860,7 @@ export function StoreProvider({ children }) {
         ...s,
         conversations: s.conversations.map((c) =>
           c.id === convId
-            ? { ...c, messages: [...c.messages, { localId, from: 'me', text, at: nowISO(), status: isRemote ? 'sending' : 'sent' }] }
+            ? { ...c, messages: [...c.messages, { localId, ...(isRemote ? {} : { id: localId }), from: 'me', text, at: nowISO(), status: isRemote ? 'sending' : 'sent' }] }
             : c
         ),
       }))
@@ -727,29 +871,29 @@ export function StoreProvider({ children }) {
         return
       }
 
-      // Two demo accounts talking in this browser: the other person finds the message in their chat
-      // when they log in, and can answer it from there.
-      if (conv && me && !me.remote && me.refId) {
-        setState((s) => {
-          const other = s.users.find((u) => !u.remote && u.id !== me.id && u.refId && u.refId === conv.peer.refId)
-          if (!other) return s
+      const other = conv && me && !me.remote
+        ? state.users.find((u) =>
+          !u.remote &&
+          u.id !== me.id &&
+          (
+            (conv.remoteUserId && u.id === conv.remoteUserId) ||
+            (conv.peer?.userId && u.id === conv.peer.userId) ||
+            (me.refId && conv.peer?.refId && u.refId === conv.peer.refId)
+          )
+        )
+        : null
+      const blockedByOther = !!other && (state.blocked?.[other.id] || []).includes(me.refId)
 
-          const lists = { investor: s.investors, student: s.students, startup: s.startups, professional: s.mentors, organization: s.organizations }
-          const mine = lists[me.role]?.find((x) => x.id === me.refId)
-          const subtitle = me.role === 'student' ? `Mentee · ${mine?.institution || ''}`
-            : me.role === 'professional' ? `${mine?.title || ''}, ${mine?.company || ''}`
-              : ROLE_LABEL[me.role] || 'Member'
+      if (other && !blockedByOther) setState((s) => demoDeliver(s, me, other, text, localId))
 
-          const incoming = { from: 'peer', text, at: nowISO() }
-          const theirs = s.conversations.find((c) => c.ownerId === other.id && c.peer.refId === me.refId)
-
-          if (theirs) {
-            return { ...s, conversations: s.conversations.map((c) => (c.id === theirs.id ? { ...c, messages: [...c.messages, incoming] } : c)) }
-          }
-
-          const peer = { name: me.name, initials: me.initials, color: me.color, subtitle, kind: KIND[me.role] || 'professional', refId: me.refId }
-          return { ...s, conversations: [{ id: uid('cv'), ownerId: other.id, peer, messages: [incoming] }, ...s.conversations] }
-        })
+      // Simulated ticks: sent now, delivered after about 1 second,
+      // seen after about 3 seconds for sample contacts when FAKE_REPLIES is on
+      // (a real demo account marks it seen when they open the chat).
+      if (!blockedByOther) {
+        timers.current.push(setTimeout(() => patchMsg(localId, (m) => ({ deliveredAt: m.deliveredAt || nowISO() })), 1000))
+        if (FAKE_REPLIES && !other) {
+          timers.current.push(setTimeout(() => patchMsg(localId, (m) => ({ deliveredAt: m.deliveredAt || nowISO(), seenAt: nowISO() })), 3000))
+        }
       }
 
       const kind = conv?.peer.kind || kindHint
@@ -765,11 +909,71 @@ export function StoreProvider({ children }) {
           ...s,
           conversations: s.conversations.map((c) =>
             c.id === convId
-              ? { ...c, messages: [...c.messages, { from: 'peer', text: reply, at: nowISO() }] }
+              ? { ...c, messages: [...c.messages, { id: uid('m'), from: 'peer', text: reply, at: nowISO() }] }
               : c
           ),
         }))
       }, 2200))
+    },
+
+    // Block someone. targetId = Supabase user id (real chats) or the contact's refId (demo chats).
+    async blockUser(targetId) {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      if (!me || !targetId) return false
+
+      if (me.remote && UUID_RE.test(targetId)) {
+        const { error } = await supabase.from('blocks').insert({ blocker_id: me.id, blocked_id: targetId })
+        if (error && error.code !== '23505') { toast(error.message); return false }
+        setBlockedRemote((b) => (b.includes(targetId) ? b : [...b, targetId]))
+        toast('Blocked.')
+        return true
+      }
+
+      // Demo accounts: local state only.
+      setState((s) => {
+        const cur = s.blocked?.[s.currentUserId] || []
+        return cur.includes(targetId) ? s : { ...s, blocked: { ...(s.blocked || {}), [s.currentUserId]: [...cur, targetId] } }
+      })
+      toast('Blocked.')
+      return true
+    },
+
+    async unblockUser(targetId) {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      if (!me || !targetId) return false
+
+      if (me.remote && UUID_RE.test(targetId)) {
+        const { error } = await supabase.from('blocks').delete().eq('blocker_id', me.id).eq('blocked_id', targetId)
+        if (error) { toast(error.message); return false }
+        setBlockedRemote((b) => b.filter((x) => x !== targetId))
+        toast('Unblocked.')
+        return true
+      }
+
+      setState((s) => ({ ...s, blocked: { ...(s.blocked || {}), [s.currentUserId]: (s.blocked?.[s.currentUserId] || []).filter((x) => x !== targetId) } }))
+      toast('Unblocked.')
+      return true
+    },
+
+    // Delete a chat from MY side only. Real chats record a "cleared at" time in Supabase.
+    // If the other person writes again, the chat comes back with only the new messages.
+    async deleteChat(convId) {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      const conv = state.conversations.find((c) => c.id === convId)
+      if (!conv) return false
+
+      if (me?.remote && conv.remoteId) {
+        const { error } = await supabase.rpc('clear_conversation', { conv_id: conv.remoteId })
+        if (error) { toast(error.message); return false }
+        // Use the server's time, so the clock on this device cannot hide new messages.
+        const { data: row } = await supabase.from('conversation_clears').select('cleared_at').eq('conversation_id', conv.remoteId).eq('user_id', me.id).maybeSingle()
+        clearsRef.current = { ...clearsRef.current, [conv.remoteId]: row?.cleared_at || nowISO() }
+      }
+
+      delete pending.current[convId]
+      setState((s) => ({ ...s, conversations: s.conversations.filter((c) => c.id !== convId) }))
+      toast('Chat deleted.')
+      return true
     },
 
     requestMentorship(studentId, mentorId, message) {
@@ -821,9 +1025,10 @@ export function StoreProvider({ children }) {
           // Message the mentor "sends" automatically the moment they accept.
           const welcome = `Hi ${(st?.name || 'there').split(' ')[0]}, I've accepted your mentorship request. Let's plan your first session.`
 
-          if (proUser && st) add.push({ id: uid('cv'), ownerId: proUser.id, peer: { name: st.name, initials: st.initials, color: st.color, subtitle: `Mentee · ${st.institution}`, kind: 'student', refId: st.id }, messages: [{ from: 'peer', text: req.message, at: req.at }, { from: 'me', text: welcome, at: nowISO() }] })
+          // Messages from the other person get an id, so they count as unread until the chat is opened.
+          if (proUser && st) add.push({ id: uid('cv'), ownerId: proUser.id, peer: { name: st.name, initials: st.initials, color: st.color, subtitle: `Mentee · ${st.institution}`, kind: 'student', refId: st.id }, messages: [{ id: uid('m'), from: 'peer', text: req.message, at: req.at }, { id: uid('m'), from: 'me', text: welcome, at: nowISO(), status: 'sent' }] })
 
-          if (stuUser && m) add.push({ id: uid('cv'), ownerId: stuUser.id, peer: { name: m.name, initials: m.initials, color: m.color, subtitle: `${m.title}, ${m.company}`, kind: 'mentor', refId: m.id }, messages: [{ from: 'me', text: req.message, at: req.at }, { from: 'system', text: `${m.name} accepted your mentorship request.`, at: nowISO() }, { from: 'peer', text: welcome, at: nowISO() }] })
+          if (stuUser && m) add.push({ id: uid('cv'), ownerId: stuUser.id, peer: { name: m.name, initials: m.initials, color: m.color, subtitle: `${m.title}, ${m.company}`, kind: 'mentor', refId: m.id }, messages: [{ id: uid('m'), from: 'me', text: req.message, at: req.at, status: 'sent' }, { from: 'system', text: `${m.name} accepted your mentorship request.`, at: nowISO() }, { id: uid('m'), from: 'peer', text: welcome, at: nowISO() }] })
 
           conversations = [...add, ...conversations]
         }
@@ -935,8 +1140,10 @@ export function StoreProvider({ children }) {
       syncRef.current?.()
     },
 
+    // data.prize is optional: a positive whole number (NPR) or empty. Saved as challenges.prize_amount.
     postChallenge(data) {
       const me = state.users.find((u) => u.id === state.currentUserId)
+      const prize = normPrize(data.prize)
 
       if (me?.remote) {
         // Saved to Supabase so every member (mentors included) sees it.
@@ -945,6 +1152,7 @@ export function StoreProvider({ children }) {
             const { data: row, error } = await supabase.from('challenges').insert({
               poster_id: me.id, poster_type: me.role === 'startup' ? 'startup' : 'organization',
               title: data.title, category: data.category, urgency: data.urgency, tags: data.tags || [], description: data.desc || '',
+              prize_amount: prize,
             }).select().single()
             if (error) { toast(error.message); return }
             setState((s) => ({ ...s, challenges: [challFromRow(row), ...s.challenges.filter((c) => c.id !== row.id)] }))
@@ -953,7 +1161,7 @@ export function StoreProvider({ children }) {
         return
       }
 
-      setState((s) => ({ ...s, challenges: [{ id: uid('c'), at: nowISO(), responses: [], ...data }, ...s.challenges] }))
+      setState((s) => ({ ...s, challenges: [{ id: uid('c'), at: nowISO(), responses: [], ...data, prize }, ...s.challenges] }))
     },
 
     respondChallenge(challengeId, responder, text, posterPeer) {
@@ -973,14 +1181,30 @@ export function StoreProvider({ children }) {
         return
       }
 
+      // Demo: the idea shows in the list at once, goes into my chat with the poster,
+      // and is delivered to the poster if they are a demo account (unless they blocked me).
+      const msgId = uid('m')
       setState((s) => {
-        const conv = { id: uid('cv'), ownerId: s.currentUserId, peer: posterPeer, messages: [{ from: 'system', text: `Solution suggested on “${s.challenges.find((c) => c.id === challengeId)?.title}”`, at: nowISO() }, { from: 'me', text, at: nowISO() }] }
-        return {
+        const chal = s.challenges.find((c) => c.id === challengeId)
+        const intro = `Solution suggested on “${chal?.title}”`
+        const mine = [{ from: 'system', text: intro, at: nowISO() }, { id: msgId, localId: msgId, from: 'me', text, at: nowISO(), status: 'sent' }]
+        const existing = posterPeer && s.conversations.find((c) => c.ownerId === s.currentUserId && (c.peer.refId === posterPeer.refId || c.peer.name === posterPeer.name))
+
+        let next = {
           ...s,
-          conversations: [conv, ...s.conversations],
+          conversations: existing
+            ? s.conversations.map((c) => (c.id === existing.id ? { ...c, messages: [...c.messages, ...mine] } : c))
+            : [{ id: uid('cv'), ownerId: s.currentUserId, peer: posterPeer, messages: mine }, ...s.conversations],
           challenges: s.challenges.map((c) => (c.id === challengeId ? { ...c, responses: [...c.responses, { ...responder, text, at: nowISO() }] } : c)),
         }
+
+        const poster = me && !me.remote && me.refId
+          ? s.users.find((u) => !u.remote && u.id !== me.id && u.refId && u.refId === chal?.posterId)
+          : null
+        if (poster && !(s.blocked?.[poster.id] || []).includes(me.refId)) next = demoDeliver(next, me, poster, text, msgId, intro)
+        return next
       })
+      timers.current.push(setTimeout(() => patchMsg(msgId, (m) => ({ deliveredAt: m.deliveredAt || nowISO() })), 1000))
     },
 
     markNotifsRead(ids) {
@@ -991,7 +1215,7 @@ export function StoreProvider({ children }) {
       try { localStorage.removeItem(KEY) } catch { /* ignore */ }
       setState(initial())
     },
-  }), [state, toast, meId])
+  }), [state, toast, meId, blockedRemote, patchMsg])
 
   const value = {
     state,
@@ -1001,6 +1225,7 @@ export function StoreProvider({ children }) {
     retryMessage,
     unreadByConv,
     unreadTotal,
+    blockedIds,
     entity: entityOf(user),
     entityOf,
     typing,

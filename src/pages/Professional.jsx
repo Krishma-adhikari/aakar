@@ -18,7 +18,7 @@ const PAY_METHODS = [
 const isNepaliMobile = (n) => /^(96|97|98)\d{8}$/.test(n) && !/^(\d)\1{7}$/.test(n.slice(2))
 
 export function ProHome() {
-  const { state, entity, respondRequest, toast } = useStore()
+  const { state, entity, respondRequest, startChat, toast } = useStore()
   const nav = useNavigate()
   const reqs = state.requests.filter((r) => r.mentorId === entity.id)
   const pending = reqs.filter((r) => r.status === 'pending')
@@ -45,6 +45,7 @@ export function ProHome() {
             {pending.length === 0 && <div className="card"><Empty icon={Check} title="No pending requests" text="Students matched to your expertise can request you anytime." /></div>}
             {pending.map((r) => {
               const st = state.students.find((s) => s.id === r.studentId)
+              if (!st) return null
               const common = overlap(st.interests, entity.fields)
               return (
                 <div key={r.id} className="card card-pad">
@@ -69,7 +70,23 @@ export function ProHome() {
             <div className="card card-pad mt-4">
               {reqs.filter((r) => r.status === 'accepted').map((r) => {
                 const st = state.students.find((s) => s.id === r.studentId)
-                return <div key={r.id} className="list-row"><Avatar p={st} size="sm" /><div className="grow"><div className="small bold">{st.name}</div><div className="xs muted">{st.goal}</div></div><button className="btn btn-ghost btn-sm" onClick={() => nav('/app/messages')}><MessageCircle size={14} /> Chat</button></div>
+                if (!st) return null
+                return (
+                  <div key={r.id} className="list-row">
+                    <Avatar p={st} size="sm" />
+                    <div className="grow"><div className="small bold">{st.name}</div><div className="xs muted">{st.goal}</div></div>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        // startChat returns the existing conversation if there is one, otherwise creates it.
+                        const id = startChat({ name: st.name, initials: st.initials, color: st.color, subtitle: `Mentee · ${st.institution}`, kind: 'student', refId: st.id, userId: st.userId })
+                        nav('/app/messages?c=' + id)
+                      }}
+                    >
+                      <MessageCircle size={14} /> Chat
+                    </button>
+                  </div>
+                )
               })}
             </div>
           </>}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Navigate, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Avatar, Logo, RoleBadge, ThemeToggle, ago } from '../components/ui'
+import SignOutButton from '../components/SignOutButton' // NEW
 import {
   Bell, Bookmark, CalendarDays, CheckCircle2, Compass, GraduationCap, Home, Landmark, Lightbulb, LogOut, MessageCircle,
   Rocket, User, Users, Wrench,
@@ -62,6 +63,7 @@ function Notifications() {
 export default function AppShell() {
   const { user, entity, logout, state, unreadTotal } = useStore()
   const nav = useNavigate()
+  const { pathname } = useLocation() // NEW
   if (!user) return <Navigate to="/login" replace />
   if (user.role === 'admin') return <Navigate to="/admin" replace />
   if (user.status !== 'approved') return <Navigate to="/pending" replace />
@@ -86,8 +88,11 @@ export default function AppShell() {
         <div className="side-section">Menu</div>
         {links}
         <div className="side-user">
-          <Avatar p={user} size="sm" />
-          <div className="grow"><div className="small bold" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div><RoleBadge role={user.role} /></div>
+          {/* NEW: avatar + name open the profile */}
+          <span onClick={() => nav('/app/profile')} style={{ cursor: 'pointer', display: 'inline-flex' }} title="My profile">
+            <Avatar p={user} size="sm" />
+          </span>
+          <div className="grow" onClick={() => nav('/app/profile')} style={{ cursor: 'pointer', minWidth: 0 }} title="My profile"><div className="small bold" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div><RoleBadge role={user.role} /></div>
           <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={() => { logout(); nav('/') }} aria-label="Log out" title="Log out"><LogOut size={15} /></button>
         </div>
       </aside>
@@ -97,11 +102,20 @@ export default function AppShell() {
             <span className="badge badge-green mobile-hide"><CheckCircle2 size={12} /> Verified {user.role}</span>
             <ThemeToggle />
             <Notifications />
-            <Avatar p={user} size="sm" />
+            {/* NEW: top-right avatar opens the profile */}
+            <span onClick={() => nav('/app/profile')} style={{ cursor: 'pointer', display: 'inline-flex' }} title="My profile">
+              <Avatar p={user} size="sm" />
+            </span>
           </div>
         </header>
         <nav className="mobile-nav">{links}<button className="side-link" style={{ border: 0, background: 'none' }} onClick={() => { logout(); nav('/') }}><LogOut size={16} /> Log out</button></nav>
         <Outlet />
+        {/* NEW: Sign out, shown only on the profile page */}
+        {pathname === '/app/profile' && (
+          <div style={{ padding: '0 clamp(16px, 4vw, 40px) 40px' }}>
+            <SignOutButton />
+          </div>
+        )}
       </div>
     </div>
   )

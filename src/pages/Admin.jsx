@@ -14,7 +14,7 @@ const CHECKS = {
 const REASONS = ['Could not verify identity documents.', 'Documents are blurry or incomplete.', 'Registration number does not match records.', 'Duplicate account.', 'Other']
 
 function Review({ u, onClose }) {
-  const { approve, reject, entityOf, toast } = useStore()
+  const { approve, reject, entityOf, toast, docUrl } = useStore()
   const checks = CHECKS[u.role] || []
   const [done, setDone] = useState(u.status === 'approved' ? checks : [])
   const [rejecting, setRejecting] = useState(false)
@@ -42,6 +42,17 @@ function Review({ u, onClose }) {
     onClose()
   }
 
+  // Open the tab first (so browsers don't block it), then point it at the signed URL.
+  // docUrl already shows its own error toast on failure.
+  const openFile = async (f) => {
+    const w = window.open('', '_blank')
+    const url = await docUrl(f.path)
+    if (url && w) w.location.href = url
+    else w?.close()
+  }
+
+  const hasFiles = !!u.files?.length
+
   return (
     <div className="drawer-wrap" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="drawer">
@@ -60,15 +71,23 @@ function Review({ u, onClose }) {
           </div>
 
           <hr className="divider" />
-          <div className="xs faint bold">DOCUMENTS ({u.docs?.length || 0})</div>
+          <div className="xs faint bold">DOCUMENTS ({u.files?.length || u.docs?.length || 0})</div>
           <div className="stack mt-3" style={{ gap: 10 }}>
-            {(u.docs || []).map((d) => (
-              <div key={d} className="doc-preview">
-                <div className="doc-thumb" />
-                <div className="grow"><div className="small bold">{d}</div><div className="xs muted">Uploaded with application · encrypted</div></div>
-                <button className="btn btn-ghost btn-sm" onClick={() => setPreview(d)}><Eye size={14} /> View</button>
-              </div>
-            ))}
+            {hasFiles
+              ? u.files.map((f) => (
+                  <div key={f.path} className="doc-preview">
+                    <div className="doc-thumb" />
+                    <div className="grow"><div className="small bold">{f.label}</div><div className="xs muted">Uploaded with application · encrypted</div></div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => openFile(f)}><Eye size={14} /> View</button>
+                  </div>
+                ))
+              : (u.docs || []).map((d) => (
+                  <div key={d} className="doc-preview">
+                    <div className="doc-thumb" />
+                    <div className="grow"><div className="small bold">{d}</div><div className="xs muted">Uploaded with application · encrypted</div></div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setPreview(d)}><Eye size={14} /> View</button>
+                  </div>
+                ))}
           </div>
 
           {checks.length > 0 && <>
@@ -185,7 +204,7 @@ export default function Admin() {
                       <td><div className="row"><Avatar p={u} size="sm" /><div><div className="bold">{u.name}</div><div className="xs muted">{u.email}</div></div></div></td>
                       <td><RoleBadge role={u.role} /></td>
                       <td className="mobile-hide small muted">{ago(u.submittedAt)}</td>
-                      <td className="mobile-hide"><span className="chip"><FileText size={12} /> {u.docs?.length || 0} files</span></td>
+                      <td className="mobile-hide"><span className="chip"><FileText size={12} /> {u.files?.length || u.docs?.length || 0} files</span></td>
                       <td><StatusBadge status={u.status} /></td>
                       <td style={{ textAlign: 'right' }}><button className="btn btn-ghost btn-sm">{u.status === 'pending' ? <>Review <Check size={14} /></> : 'View'}</button></td>
                     </tr>

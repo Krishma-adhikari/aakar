@@ -109,6 +109,7 @@ const fromRow = (row, prev = {}) => ({
   profile: row.details?.profile,
   raw: row.details?.raw,
   docs: row.details?.docs || [],
+  files: row.details?.files || [],
   remote: true,
 })
 
@@ -316,7 +317,7 @@ function buildEntity(user) {
     case 'student':
       return ['students', { ...base, institution: r.institution || user.profile?.Institution || '', level: r.level || user.profile?.Level || '', city: r.city || user.profile?.City || '', interests: r.interests || (user.profile?.Interests || '').split(',').map((s) => s.trim()).filter(Boolean), goal: r.goal || '' }]
     case 'professional':
-      return ['mentors', { ...base, title: r.title || user.profile?.Title || '', company: r.company || user.profile?.Company || '', location: r.country || user.profile?.Country || '', years: Number(r.years) || 5, fields: r.fields || (user.profile?.Expertise || '').split(',').map((s) => s.trim()).filter(Boolean), degree: r.degree || '', bio: r.bio || '', rating: 5, mentees: 0, hours: Number(r.hours) || 4 }]
+      return ['mentors', { ...base, title: r.title || user.profile?.Title || '', company: r.company || user.profile?.Company || '', location: r.country || user.profile?.Country || '', years: Number(r.years) || 5, fields: r.fields || (user.profile?.Expertise || '').split(',').map((s) => s.trim()).filter(Boolean), degree: r.degree || '', bio: r.bio || '', rating:null, mentees: 0, hours: Number(r.hours) || 4 }]
     case 'startup': {
       const name = r.startupName || user.profile?.['Startup name'] || user.name
       const ask = Number(String(r.ask || user.profile?.['Funding ask'] || '50000').replace(/[^\d]/g, '')) || 50000
@@ -335,6 +336,7 @@ export function StoreProvider({ children }) {
   const [onlineUsers, setOnlineUsers] = useState([])
   const [blockedRemote, setBlockedRemote] = useState([]) // user ids I blocked (from Supabase)
   const [toasts, setToasts] = useState([])
+  const [remoteNotifs, setRemoteNotifs] = useState([]) // rows of the Supabase "notifications" table
   const timers = useRef([])
   const stateRef = useRef(state)
   stateRef.current = state
@@ -464,6 +466,10 @@ export function StoreProvider({ children }) {
         const { data: clrs } = await supabase.from('conversation_clears').select('conversation_id, cleared_at').eq('user_id', meId)
         if (clrs) clearsRef.current = Object.fromEntries(clrs.map((c) => [c.conversation_id, c.cleared_at]))
 
+        // My notifications (created by database triggers)
+        const { data: nts } = await supabase.from('notifications').select('*').eq('user_id', meId).order('created_at', { ascending: false }).limit(50)
+        if (alive && nts) setRemoteNotifs(nts)
+
         // Mentorship requests and help-desk challenges shared between real members
         const profileById = Object.fromEntries((profs || []).map((p) => [p.id, p]))
         const { data: reqs } = await supabase.from('mentorship_requests').select('*').order('created_at', { ascending: false })
@@ -591,6 +597,10 @@ export function StoreProvider({ children }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, reloadSoon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'session_registrations' }, reloadSoon)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'session_private' }, reloadSoon)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + meId }, (payload) => {
+        setRemoteNotifs((n) => (n.some((x) => x.id === payload.new.id) ? n : [payload.new, ...n]))
+        toast(payload.new.title)
+      })
       .subscribe()
 
     window.addEventListener('focus', loadAll)
@@ -600,6 +610,7 @@ export function StoreProvider({ children }) {
       clearTimeout(timer)
       syncRef.current = null
       setBlockedRemote([])
+      setRemoteNotifs([])
       clearsRef.current = {}
       window.removeEventListener('focus', loadAll)
       supabase.removeChannel(channel)
@@ -723,6 +734,13 @@ export function StoreProvider({ children }) {
       }
     },
 
+
+    async docUrl(path) {
+      const { data, error } = await supabase.storage.from('kyc-docs').createSignedUrl(path, 60)
+      if (error) { toast(error.message); return null }
+      return data.signedUrl
+    },
+
     setCurrent(id) { setState((s) => ({ ...s, currentUserId: id })) },
 
     logout() {
@@ -731,7 +749,7 @@ export function StoreProvider({ children }) {
     },
 
     async register(data) {
-      const { role, name, password, profile, raw, docs } = data
+      const { role, name, password, profile, raw, docs, files = [] } = data
       const email = data.email.trim()
       if (state.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) return { error: 'An account with this email already exists.' }
       try {
@@ -739,14 +757,27 @@ export function StoreProvider({ children }) {
         if (error) throw error
         if (!res.session) return { error: 'Supabase is asking for email confirmation. Turn off "Confirm email" in Supabase (Authentication, Sign In / Providers, Email).' }
 
+        // Upload the real files into this user's own folder.
+        const uploaded = []
+        let failed = 0
+        for (const f of files) {
+          const ext = (f.file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '')
+          const path = `${res.user.id}/${f.key}-${Date.now()}.${ext}`
+          const { error: upErr } = await supabase.storage.from('kyc-docs').upload(path, f.file, { contentType: f.file.type, upsert: false })
+          if (upErr) { console.error('Upload failed:', upErr.message); failed++; continue }
+          uploaded.push({ key: f.key, label: f.label, name: f.file.name, path })
+        }
+
         const row = {
           id: res.user.id, full_name: name, role, email,
           country: raw?.country ?? null, bio: raw?.bio ?? null,
           keywords: raw?.interests || raw?.fields || raw?.sectors || [],
-          details: { profile, raw, docs },
+          details: { profile, raw, docs, files: uploaded },
         }
         const { error: pErr } = await supabase.from('profiles').insert(row)
         if (pErr) { await supabase.auth.signOut(); return { error: pErr.message } }
+
+        if (failed) toast(`${failed} file(s) could not be uploaded. The admin may ask you to send them again.`)
 
         const u = fromRow({ ...row, status: 'pending', is_admin: false, created_at: nowISO() })
         setState((s) => ({ ...s, users: [...s.users.filter((x) => x.id !== u.id), u], currentUserId: u.id }))
@@ -1208,6 +1239,15 @@ export function StoreProvider({ children }) {
     },
 
     markNotifsRead(ids) {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      if (me?.remote) {
+        // Real account: saved in Supabase, so it is the same on every device.
+        const at = nowISO()
+        setRemoteNotifs((n) => n.map((x) => (ids.includes(x.id) && !x.read_at ? { ...x, read_at: at } : x)))
+        supabase.from('notifications').update({ read_at: at }).in('id', ids).is('read_at', null)
+          .then(({ error }) => { if (error) console.error('Mark read failed:', error.message) })
+        return
+      }
       setState((s) => ({ ...s, readNotifs: { ...s.readNotifs, [s.currentUserId]: [...new Set([...(s.readNotifs[s.currentUserId] || []), ...ids])] } }))
     },
 
@@ -1230,6 +1270,7 @@ export function StoreProvider({ children }) {
     entityOf,
     typing,
     onlineUsers,
+    remoteNotifs,
     toast,
     ...api,
   }
@@ -1248,9 +1289,13 @@ export const useStore = () => useContext(Ctx)
 
 // Notifications for the signed-in user, derived from shared state.
 export function useNotifications() {
-  const { state, user, entity } = useStore()
+  const { state, user, entity, remoteNotifs } = useStore()
 
   return useMemo(() => {
+    // Real accounts: read the saved notifications. Demo accounts keep the old calculated ones below.
+    if (user?.remote) {
+      return remoteNotifs.map((n) => ({ id: n.id, icon: n.icon, text: n.title, sub: n.body || '', to: n.link || '/app', at: n.created_at, unread: !n.read_at }))
+    }
     if (!user || !entity) return []
     const read = state.readNotifs[user.id] || []
     const out = []
@@ -1290,5 +1335,5 @@ export function useNotifications() {
     }
 
     return out.sort((a, b) => new Date(b.at) - new Date(a.at)).map((n) => ({ ...n, unread: !read.includes(n.id) }))
-  }, [state, user, entity])
+  }, [state, user, entity, remoteNotifs])
 }

@@ -1,22 +1,57 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { StoreProvider, useStore } from './store'
-import Landing from './pages/Landing'
-import { Login, Pending, Register, RoleSelect } from './pages/Auth'
-import Admin from './pages/Admin'
-import AppShell from './pages/AppShell'
-import Messages from './pages/Messages'
-import HelpDesk from './pages/HelpDesk'
-import { Discover, InvestorProfile, Saved, StartupDetail } from './pages/Investor'
-import { InvestorsDirectory, Profile, StartupHome, StartupProfile } from './pages/Startup'
-import { Mentors, StudentHome, StudentSessions } from './pages/Student'
-import { ProHome, ProSessions, ProStudents } from './pages/Professional'
 import DemoNav from './components/DemoNav' // TEMPORARY: no-login navigation
 
-// Renders the page for the signed-in user's role, or sends them home.
-function ByRole(map) {
+// Pages are code-split so each one loads only when visited.
+// Helper for modules that use named exports instead of a default export.
+const named = (loader, name) => lazy(() => loader().then((m) => ({ default: m[name] })))
+
+const Landing = lazy(() => import('./pages/Landing'))
+const Admin = lazy(() => import('./pages/Admin'))
+const AppShell = lazy(() => import('./pages/AppShell'))
+const Messages = lazy(() => import('./pages/Messages'))
+const HelpDesk = lazy(() => import('./pages/HelpDesk'))
+
+const forgot = () => import('./pages/ForgotPassword')
+const ForgotPassword = named(forgot, 'ForgotPassword')
+const ResetPassword = named(forgot, 'ResetPassword')
+
+
+const auth = () => import('./pages/Auth')
+const Login = named(auth, 'Login')
+const Pending = named(auth, 'Pending')
+const Register = named(auth, 'Register')
+const RoleSelect = named(auth, 'RoleSelect')
+
+
+const investor = () => import('./pages/Investor')
+const Discover = named(investor, 'Discover')
+const InvestorProfile = named(investor, 'InvestorProfile')
+const Saved = named(investor, 'Saved')
+const StartupDetail = named(investor, 'StartupDetail')
+
+const startup = () => import('./pages/Startup')
+const InvestorsDirectory = named(startup, 'InvestorsDirectory')
+const Profile = named(startup, 'Profile')
+const StartupHome = named(startup, 'StartupHome')
+const StartupProfile = named(startup, 'StartupProfile')
+
+const student = () => import('./pages/Student')
+const Mentors = named(student, 'Mentors')
+const StudentHome = named(student, 'StudentHome')
+const StudentSessions = named(student, 'StudentSessions')
+
+const professional = () => import('./pages/Professional')
+const ProHome = named(professional, 'ProHome')
+const ProSessions = named(professional, 'ProSessions')
+const ProStudents = named(professional, 'ProStudents')
+
+
+function RoleRoute({ fallback = '/app', ...pages }) {
   const { user } = useStore()
-  return map[user?.role] || <Navigate to="/app" replace />
+  if (!user) return <Navigate to="/login" replace />
+  return pages[user.role] || <Navigate to={fallback} replace />
 }
 
 function ScrollTop() {
@@ -25,34 +60,71 @@ function ScrollTop() {
   return null
 }
 
+function PageLoader() {
+  return <div style={{ padding: '4rem 1rem', textAlign: 'center', opacity: 0.6 }}>Loading…</div>
+}
+
 export default function App() {
   return (
     <StoreProvider>
-      <BrowserRouter>
+      {/* BASE_URL follows vite.config: '/aakar/' locally, '/' on Vercel */}
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <ScrollTop />
         <DemoNav />
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/register" element={<RoleSelect />} />
-          <Route path="/register/:role" element={<Register />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/pending" element={<Pending />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/app" element={<AppShell />}>
-            <Route index element={<ByRole investor={<Discover />} startup={<StartupHome />} student={<StudentHome />} professional={<ProHome />} organization={<Navigate to="/app/helpdesk" replace />} />} />
-            <Route path="startups" element={<ByRole investor={<Discover />} />} />
-            <Route path="startups/:id" element={<StartupDetail />} />
-            <Route path="saved" element={<ByRole investor={<Saved />} />} />
-            <Route path="investors" element={<ByRole startup={<InvestorsDirectory />} />} />
-            <Route path="sessions" element={<ByRole student={<StudentSessions />} professional={<ProSessions />} />} />
-            <Route path="mentors" element={<ByRole student={<Mentors />} />} />
-            <Route path="students" element={<ByRole professional={<ProStudents />} />} />
-            <Route path="helpdesk" element={<HelpDesk />} />
-            <Route path="messages" element={<Messages />} />
-            <Route path="profile" element={<ByRole investor={<InvestorProfile />} startup={<StartupProfile />} student={<Profile />} professional={<Profile />} organization={<Profile />} />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/register" element={<RoleSelect />} />
+            <Route path="/register/:role" element={<Register />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/pending" element={<Pending />} />
+            <Route path="/admin" element={<Admin />} />
+
+            <Route path="/app" element={<AppShell />}>
+              <Route
+                index
+                element={
+                  <RoleRoute
+                    fallback="/"
+                    investor={<Discover />}
+                    startup={<StartupHome />}
+                    student={<StudentHome />}
+                    professional={<ProHome />}
+                    organization={<Navigate to="/app/helpdesk" replace />}
+                  />
+                }
+              />
+              <Route path="startups" element={<RoleRoute investor={<Discover />} />} />
+              <Route path="startups/:id" element={<StartupDetail />} />
+              <Route path="saved" element={<RoleRoute investor={<Saved />} />} />
+              <Route path="investors" element={<RoleRoute startup={<InvestorsDirectory />} />} />
+              <Route
+                path="sessions"
+                element={<RoleRoute student={<StudentSessions />} professional={<ProSessions />} />}
+              />
+              <Route path="mentors" element={<RoleRoute student={<Mentors />} />} />
+              <Route path="students" element={<RoleRoute professional={<ProStudents />} />} />
+              <Route path="helpdesk" element={<HelpDesk />} />
+              <Route path="messages" element={<Messages />} />
+              <Route
+                path="profile"
+                element={
+                  <RoleRoute
+                    investor={<InvestorProfile />}
+                    startup={<StartupProfile />}
+                    student={<Profile />}
+                    professional={<Profile />}
+                    organization={<Profile />}
+                  />
+                }
+              />
+            </Route>
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </StoreProvider>
   )

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, BadgeCheck, Bookmark, BookmarkCheck, Calendar, Eye, EyeOff, MapPin, MessageCircle, Search, Users } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, Bookmark, BookmarkCheck, Calendar, Eye, EyeOff, MapPin, MessageCircle, Search, Sparkles, Users } from 'lucide-react'
 import { Avatar, ChipSelect, Empty, Modal, Toggle, money } from '../components/ui'
 import { SECTORS, STAGES } from '../data/demo'
 import { useStore } from '../store'
+import { recommendStartups } from '../lib/recommend'
 
-export function StartupCard({ s, saved, onSave }) {
+export function StartupCard({ s, saved, onSave, why }) {
   const nav = useNavigate()
   return (
     <div className="card card-hover s-card" onClick={() => nav('/app/startups/' + s.id)}>
@@ -19,6 +20,7 @@ export function StartupCard({ s, saved, onSave }) {
         {onSave && <button className="icon-btn" onClick={(e) => { e.stopPropagation(); onSave(s.id) }} aria-label="Save">{saved ? <BookmarkCheck size={17} color="var(--primary)" /> : <Bookmark size={17} />}</button>}
       </div>
       <p className="small" style={{ color: 'var(--ink-2)', minHeight: 44 }}>{s.tagline}</p>
+      {why?.length > 0 && <div className="xs muted row" style={{ gap: 4 }}><Sparkles size={11} /> Recommended because: {why.join(', ')}</div>}
       <div className="metrics-mini">{s.traction.map((t) => <div key={t.k}><div className="k">{t.k}</div><div className="v">{t.v}</div></div>)}</div>
       <div>
         <div className="row-between small"><span><b>{money(s.raised)}</b> <span className="muted">raised</span></span><span className="muted">Ask <b style={{ color: 'var(--ink)' }}>{money(s.ask)}</b> · {s.equity}% equity</span></div>
@@ -29,23 +31,29 @@ export function StartupCard({ s, saved, onSave }) {
 }
 
 export function Discover() {
-  const { state, user, toggleSave } = useStore()
+  const { state, user, entity, toggleSave } = useStore()
+  const isInvestor = user.role === 'investor'
   const [q, setQ] = useState('')
   const [sectors, setSectors] = useState([])
   const [stage, setStage] = useState('')
-  const [sort, setSort] = useState('trending')
+  const [sort, setSort] = useState(isInvestor ? 'recommended' : 'trending')
   const saved = state.saved[user.id] || []
+
+  // Recommendations for investors: text matching on sectors, bio and each startup's pitch, plus stage and ticket fit.
+  const recs = useMemo(() => (isInvestor && entity ? recommendStartups(entity, state.startups) : []), [isInvestor, entity, state.startups])
+  const recBy = useMemo(() => Object.fromEntries(recs.map((r) => [r.item.id, r])), [recs])
 
   const list = useMemo(() => {
     let l = state.startups.filter((s) =>
       (!q || (s.name + s.tagline + s.location + s.sector).toLowerCase().includes(q.toLowerCase())) &&
       (!sectors.length || sectors.includes(s.sector)) && (!stage || s.stage === stage))
+    if (sort === 'recommended') l = [...l].sort((a, b) => (recBy[b.id]?.score || 0) - (recBy[a.id]?.score || 0) || b.views - a.views)
     if (sort === 'trending') l = [...l].sort((a, b) => b.views - a.views)
     if (sort === 'ask-low') l = [...l].sort((a, b) => a.ask - b.ask)
     if (sort === 'ask-high') l = [...l].sort((a, b) => b.ask - a.ask)
     if (sort === 'progress') l = [...l].sort((a, b) => b.raised / b.ask - a.raised / a.ask)
     return l
-  }, [state.startups, q, sectors, stage, sort])
+  }, [state.startups, q, sectors, stage, sort, recBy])
 
   return (
     <div className="page">
@@ -56,12 +64,13 @@ export function Discover() {
         <div className="input-icon" style={{ width: 300 }}><Search size={16} /><input className="input" placeholder="Search by name, district or idea" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <select className="select" style={{ width: 160 }} value={stage} onChange={(e) => setStage(e.target.value)}><option value="">All stages</option>{STAGES.map((s) => <option key={s}>{s}</option>)}</select>
         <select className="select" style={{ width: 190 }} value={sort} onChange={(e) => setSort(e.target.value)}>
+          {isInvestor && <option value="recommended">Sort: Recommended</option>}
           <option value="trending">Sort: Trending</option><option value="progress">Sort: Most funded</option><option value="ask-low">Sort: Smallest ask</option><option value="ask-high">Sort: Largest ask</option>
         </select>
       </div>
       <div style={{ marginBottom: 24 }}><ChipSelect options={SECTORS} value={sectors} onChange={setSectors} /></div>
       {list.length ? (
-        <div className="startup-grid">{list.map((s) => <StartupCard key={s.id} s={s} saved={saved.includes(s.id)} onSave={toggleSave} />)}</div>
+        <div className="startup-grid">{list.map((s) => <StartupCard key={s.id} s={s} saved={saved.includes(s.id)} onSave={toggleSave} why={isInvestor ? recBy[s.id]?.reasons : undefined} />)}</div>
       ) : <Empty icon={Search} title="No startups match" text="Try removing a filter." />}
     </div>
   )

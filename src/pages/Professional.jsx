@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bell, CalendarDays, CalendarPlus, Check, GraduationCap, Heart, MessageCircle, Plus, Star, Users, Wrench, X } from 'lucide-react'
+import { Bell, CalendarDays, CalendarPlus, Check, GraduationCap, Heart, MessageCircle, Plus, Sparkles, Star, Users, Wrench, X } from 'lucide-react'
 import { Avatar, Empty, Modal, ago } from '../components/ui'
 import { KEYWORDS } from '../data/demo'
 import { useStore, validateMeetingLink } from '../store'
+import { recommendStudents } from '../lib/recommend'
 import { SessionCard, MeetingLinkEditor, overlap } from './Student'
 
 const PAY_METHODS = [
@@ -33,7 +34,7 @@ export function ProHome() {
         <Link to="/app/sessions?new=1" className="btn btn-primary"><CalendarPlus size={17} /> Host a session</Link>
       </div>
       <div className="kpis">
-        {[['Students mentored', entity.mentees, Heart, 'var(--crimson)', 'var(--crimson-50)'], ['Pending requests', pending.length, Bell, 'var(--amber)', 'var(--amber-50)'], ['Registered for my sessions', reached, Users, 'var(--blue)', 'var(--blue-50)'], ['Rating', entity.rating, Star, 'var(--gold)', 'var(--gold-50)']].map(([l, v, I, c, bg]) => (
+        {[['Students mentored', entity.mentees, Heart, 'var(--crimson)', 'var(--crimson-50)'], ['Pending requests', pending.length, Bell, 'var(--amber)', 'var(--amber-50)'], ['Registered for my sessions', reached, Users, 'var(--blue)', 'var(--blue-50)'],  ['Rating', entity.rating ?? '—', Star, 'var(--gold)', 'var(--gold-50)']].map(([l, v, I, c, bg]) => (
           <div key={l} className="card kpi"><div className="ic" style={{ background: bg, color: c }}><I size={18} /></div><div className="v">{v}</div><div className="small muted">{l}</div></div>
         ))}
       </div>
@@ -46,7 +47,8 @@ export function ProHome() {
             {pending.map((r) => {
               const st = state.students.find((s) => s.id === r.studentId)
               if (!st) return null
-              const common = overlap(st.interests, entity.fields)
+              // Why this student fits me: text matching, not only identical keywords.
+              const common = recommendStudents(entity, [st])[0]?.reasons || []
               return (
                 <div key={r.id} className="card card-pad">
                   <div className="row" style={{ alignItems: 'flex-start' }}>
@@ -326,16 +328,21 @@ export function ProSessions() {
 
 export function ProStudents() {
   const { state, entity } = useStore()
-  const list = state.students.map((s) => ({ s, common: overlap(s.interests, entity.fields) })).filter((x) => x.common.length).sort((a, b) => b.common.length - a.common.length)
+  const list = recommendStudents(entity, state.students, { minRelevance: 0.1 }).map((r) => ({ s: r.item, common: overlap(r.item.interests, entity.fields), reasons: r.reasons, relevance: r.relevance }))
   return (
     <div className="page">
       <div className="page-head"><div><h1>Students matched to you</h1><p>Based on your expertise: {entity.fields.join(', ')}.</p></div></div>
       {list.length ? (
         <div className="startup-grid">
-          {list.map(({ s, common }) => (
+          {list.map(({ s, common, reasons, relevance }) => (
             <div key={s.id} className="card card-pad stack" style={{ gap: 12 }}>
-              <div className="row"><Avatar p={s} size="lg" /><div><div className="bold">{s.name}</div><div className="small muted">{s.level}</div><div className="xs muted">{s.institution} · {s.city}</div></div></div>
+              <div className="row" style={{ alignItems: 'flex-start' }}>
+                <Avatar p={s} size="lg" />
+                <div className="grow"><div className="bold">{s.name}</div><div className="small muted">{s.level}</div><div className="xs muted">{s.institution} · {s.city}</div></div>
+                <div style={{ textAlign: 'center' }}><div className="serif" style={{ fontSize: 22, fontWeight: 600, color: 'var(--amber)' }}>{Math.round(relevance * 100)}%</div><div className="xs faint">match</div></div>
+              </div>
               {s.goal && <p className="small" style={{ color: 'var(--ink-2)' }}><b>Goal:</b> {s.goal}</p>}
+              {reasons.length > 0 && <div className="xs muted row" style={{ gap: 4 }}><Sparkles size={11} /> Why this student: {reasons.join(', ')}</div>}
               <div className="row wrap" style={{ gap: 6 }}>{s.interests.map((i) => <span key={i} className={`chip ${common.includes(i) ? 'chip-match' : ''}`}>{i}</span>)}</div>
             </div>
           ))}

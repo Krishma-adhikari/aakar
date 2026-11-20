@@ -4,12 +4,21 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Bell, CalendarDays, Check, Clock, ExternalLink, MapPin, MessageCircle, Sparkles, Star, Users, Video } from 'lucide-react'
 import { Avatar, Empty, Modal, fmtTime } from '../components/ui'
 import { useStore, validateMeetingLink } from '../store'
+import { recommendMentors, recommendSessions } from '../lib/recommend'
 
-export const overlap = (a = [], b = []) => a.filter((x) => b.includes(x))
+export const overlap = (a = [], b = []) => {
+  const set = new Set(b.map((x) => String(x).toLowerCase().trim()))
+  return a.filter((x) => set.has(String(x).toLowerCase().trim()))
+}
 
 const PAY_LABEL = { esewa: 'eSewa', khalti: 'Khalti', imepay: 'IME Pay', bank: 'Bank transfer' }
 
 const hostOf = (link) => { try { return new URL(link).hostname } catch { return 'link' } }
+
+// "Recommended because: ..." line shown under a recommended session.
+const Why = ({ reasons }) => (reasons?.length
+  ? <div className="xs muted row mt-3" style={{ gap: 4 }}><Sparkles size={11} /> Recommended because: {reasons.join(', ')}</div>
+  : null)
 
 // Host only (used on the mentor's "My sessions" cards): add or change the private meeting link.
 export function MeetingLinkEditor({ se }) {
@@ -145,7 +154,9 @@ export function StudentHome() {
   const { state, entity, toggleRegister, toast } = useStore()
   const upcoming = state.sessions.filter((s) => new Date(s.date) > new Date()).sort((a, b) => new Date(a.date) - new Date(b.date))
   const forMe = upcoming.filter((s) => entity.interests.includes(s.keyword))
-  const matches = state.mentors.map((m) => ({ m, common: overlap(m.fields, entity.interests) })).filter((x) => x.common.length).sort((a, b) => b.common.length - a.common.length)
+  // Recommendations: text matching (interests, goal, bios, descriptions), not only identical keywords.
+  const recSessions = recommendSessions(entity, upcoming, state.mentors, { minRelevance: 0.1 })
+  const matches = recommendMentors(entity, state.mentors, { minRelevance: 0.1 }).map((r) => ({ m: r.item, common: r.reasons }))
   const myReqs = state.requests.filter((r) => r.studentId === entity.id)
 
   // toggleRegister returns false when it failed (it already showed the error), so only celebrate real successes.
@@ -168,7 +179,7 @@ export function StudentHome() {
             <div className="small" style={{ color: '#cdd2e4' }}>{state.mentors.find((m) => m.id === forMe[0].hostId)?.name} is hosting “{forMe[0].title}”</div>
           </div>
           <Link to="/app/sessions" className="btn btn-white">View sessions <ArrowRight size={16} /></Link>
-          <svg viewBox="0 0 300 100" style={{ position: 'absolute', right: 0, bottom: 0, width: 300, opacity: .08 }}><path d="M0 100 L60 40 L100 70 L160 10 L220 60 L260 35 L300 70 L300 100Z" fill="#fff" /></svg>
+          <svg viewBox="0 0 300 100" style={{ position: 'absolute', right: 0, bottom: 0, width: 300, opacity: .08, pointerEvents: 'none' }}><path d="M0 100 L60 40 L100 70 L160 10 L220 60 L260 35 L300 70 L300 100Z" fill="#fff" /></svg>
         </div>
       )}
 
@@ -176,7 +187,7 @@ export function StudentHome() {
         <div>
           <div className="row-between"><h3 style={{ fontSize: 22 }}>Sessions for you</h3><Link to="/app/sessions" className="small link">See all</Link></div>
           <div className="stack mt-4">
-            {forMe.length ? forMe.slice(0, 3).map((se) => <SessionCard key={se.id} se={se} host={state.mentors.find((m) => m.id === se.hostId)} studentId={entity.id} onToggle={toggle} matched />)
+            {recSessions.length ? recSessions.slice(0, 3).map(({ item: se, reasons }) => <SessionCard key={se.id} se={se} host={state.mentors.find((m) => m.id === se.hostId)} studentId={entity.id} onToggle={toggle} matched={entity.interests.includes(se.keyword)} footer={<Why reasons={reasons} />} />)
               : <div className="card"><Empty icon={CalendarDays} title="No sessions for your interests yet" text="You’ll get a notification as soon as a mentor schedules one." /></div>}
           </div>
 
@@ -225,7 +236,9 @@ export function StudentSessions() {
   const { state, entity, toggleRegister, toast } = useStore()
   const [filter, setFilter] = useState('mine')
   const upcoming = state.sessions.filter((s) => new Date(s.date) > new Date()).sort((a, b) => new Date(a.date) - new Date(b.date))
-  const list = filter === 'mine' ? upcoming.filter((s) => entity.interests.includes(s.keyword)) : filter === 'going' ? upcoming.filter((s) => s.registered.includes(entity.id)) : upcoming
+  const recs = recommendSessions(entity, upcoming, state.mentors, { minRelevance: 0.1 })
+  const reasonsOf = Object.fromEntries(recs.map((r) => [r.item.id, r.reasons]))
+  const list = filter === 'mine' ? recs.map((r) => r.item) : filter === 'going' ? upcoming.filter((s) => s.registered.includes(entity.id)) : upcoming
 
   const toggle = async (id) => {
     const se = state.sessions.find((s) => s.id === id)
@@ -241,7 +254,7 @@ export function StudentSessions() {
         {[['mine', 'For my interests'], ['all', 'All sessions'], ['going', 'I’m going']].map(([k, l]) => <button key={k} className={`chip chip-btn ${filter === k ? 'active' : ''}`} onClick={() => setFilter(k)}>{l}</button>)}
       </div>
       <div className="stack">
-        {list.length ? list.map((se) => <SessionCard key={se.id} se={se} host={state.mentors.find((m) => m.id === se.hostId)} studentId={entity.id} onToggle={toggle} matched={entity.interests.includes(se.keyword)} />)
+        {list.length ? list.map((se) => <SessionCard key={se.id} se={se} host={state.mentors.find((m) => m.id === se.hostId)} studentId={entity.id} onToggle={toggle} matched={entity.interests.includes(se.keyword)} footer={<Why reasons={reasonsOf[se.id]} />} />)
           : <div className="card"><Empty icon={CalendarDays} title="Nothing here yet" text="Try “All sessions”, or add more interests to your profile." /></div>}
       </div>
     </div>
@@ -254,8 +267,9 @@ export function Mentors() {
   const [only, setOnly] = useState(true)
   const [asking, setAsking] = useState(null)
   const [msg, setMsg] = useState('')
-  const list = state.mentors.map((m) => ({ m, common: overlap(m.fields, entity.interests) }))
-    .filter((x) => !only || x.common.length).sort((a, b) => b.common.length - a.common.length || b.m.rating - a.m.rating)
+  const list = recommendMentors(entity, state.mentors)
+    .filter((r) => !only || r.relevance >= 0.1)
+    .map((r) => ({ m: r.item, common: overlap(r.item.fields, entity.interests), relevance: r.relevance, reasons: r.reasons }))
   const reqFor = (id) => state.requests.find((r) => r.mentorId === id && r.studentId === entity.id)
   const convFor = (id) => state.conversations.find((c) => c.ownerId === user.id && c.peer.refId === id && c.peer.kind === 'mentor')
 
@@ -267,19 +281,20 @@ export function Mentors() {
         <button className={`chip chip-btn ${!only ? 'active' : ''}`} onClick={() => setOnly(false)}>All mentors</button>
       </div>
       <div className="startup-grid">
-        {list.map(({ m, common }) => {
+        {list.map(({ m, common, relevance, reasons }) => {
           const req = reqFor(m.id)
           const conv = convFor(m.id)
-          const score = Math.round((common.length / Math.max(1, entity.interests.length)) * 100)
+          const score = Math.round(relevance * 100)
           return (
             <div key={m.id} className="card card-pad stack" style={{ gap: 14 }}>
               <div className="row" style={{ alignItems: 'flex-start' }}>
                 <Avatar p={m} size="lg" />
                 <div className="grow"><div className="bold" style={{ fontSize: 16 }}>{m.name}</div><div className="small muted">{m.title} · {m.company}</div><div className="xs muted row mt-1" style={{ gap: 4 }}><MapPin size={11} /> {m.location}</div></div>
-                {common.length > 0 && <div style={{ textAlign: 'center' }}><div className="serif" style={{ fontSize: 22, fontWeight: 600, color: 'var(--amber)' }}>{score}%</div><div className="xs faint">match</div></div>}
+                {relevance > 0.05 && <div style={{ textAlign: 'center' }}><div className="serif" style={{ fontSize: 22, fontWeight: 600, color: 'var(--amber)' }}>{score}%</div><div className="xs faint">match</div></div>}
               </div>
               <p className="small" style={{ color: 'var(--ink-2)' }}>{m.bio}</p>
               <div className="row wrap" style={{ gap: 6 }}>{m.fields.map((f) => <span key={f} className={`chip ${common.includes(f) ? 'chip-match' : ''}`}>{common.includes(f) && <Check size={12} />} {f}</span>)}</div>
+              {reasons.length > 0 && <div className="xs muted row" style={{ gap: 4 }}><Sparkles size={11} /> Why this mentor: {reasons.join(', ')}</div>}
               <div className="row xs muted" style={{ gap: 14 }}><span className="row" style={{ gap: 4 }}><Star size={13} color="var(--gold)" fill="var(--gold)" /> {m.rating}</span><span>{m.mentees} mentees</span><span>{m.hours} hrs/month</span></div>
               {req?.status === 'accepted' ? <button className="btn btn-success btn-block" onClick={() => {
                 const id = conv ? conv.id : startChat({ name: m.name, initials: m.initials, color: m.color, subtitle: `${m.title}, ${m.company}`, kind: 'mentor', refId: m.id, userId: m.userId })

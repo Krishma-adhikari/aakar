@@ -452,8 +452,17 @@ export function StoreProvider({ children }) {
       return { ...s, conversations: [...merged, ...base.filter((c) => !matched.has(c.id))] }
     })
 
+    let warnedExpired = false
     const loadAll = async () => {
       try {
+        // The app can think you are signed in while Supabase has no valid session (expired or revoked refresh token).
+        // Then every request runs as "anon" and fails with 401, so say so once instead of failing silently.
+        const { data: authNow } = await supabase.auth.getSession()
+        if (!authNow?.session) {
+          if (!warnedExpired) { warnedExpired = true; toast('Your login session expired. Log out and log in again.') }
+          return
+        }
+
         // I am online now, so anything sent to me while I was away counts as delivered.
         supabase.rpc('mark_all_delivered').then(({ error }) => { if (error) console.error('mark_all_delivered failed:', error.message) })
 
@@ -467,8 +476,22 @@ export function StoreProvider({ children }) {
         if (clrs) clearsRef.current = Object.fromEntries(clrs.map((c) => [c.conversation_id, c.cleared_at]))
 
         // My notifications (created by database triggers)
-        const { data: nts } = await supabase.from('notifications').select('*').eq('user_id', meId).order('created_at', { ascending: false }).limit(50)
+        const { data: nts, error: ntsErr } = await supabase.from('notifications').select('*').eq('user_id', meId).order('created_at', { ascending: false }).limit(50)
+        // An empty list with no error usually means row-level security hides the rows; an error says what is wrong.
+        if (ntsErr) console.error('Notifications load failed:', ntsErr.message)
+        else console.log('Notifications loaded:', nts?.length ?? 0, 'for', meId)
         if (alive && nts) setRemoteNotifs(nts)
+
+        // My watchlist (investors). Row-level security returns only my own rows.
+        // Sample startups have no account, so their saves stay local (ids that do not start with "r-").
+        const { data: saves } = await supabase.from('saved_startups').select('startup_id').eq('investor_id', meId)
+        if (alive && saves) {
+          const remoteIds = saves.map((x) => eid(x.startup_id))
+          setState((s) => {
+            const localOnly = (s.saved[meId] || []).filter((id) => !String(id).startsWith('r-'))
+            return { ...s, saved: { ...s.saved, [meId]: [...new Set([...remoteIds, ...localOnly])] } }
+          })
+        }
 
         // Mentorship requests and help-desk challenges shared between real members
         const profileById = Object.fromEntries((profs || []).map((p) => [p.id, p]))
@@ -838,12 +861,32 @@ export function StoreProvider({ children }) {
       setState((s) => ({ ...s, [listKey]: s[listKey].map((x) => (x.id === id ? { ...x, ...patch } : x)) }))
     },
 
-    toggleSave(startupId) {
-      setState((s) => {
+    // Save / unsave a startup on my watchlist.
+    // Demo accounts and sample startups: local state only.
+    // Real investor + real startup: also saved in Supabase (saved_startups), with rollback if it fails.
+    async toggleSave(startupId) {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      const startup = state.startups.find((x) => x.id === startupId)
+      const wasSaved = (state.saved[state.currentUserId] || []).includes(startupId)
+
+      const setLocal = (on) => setState((s) => {
         const cur = s.saved[s.currentUserId] || []
-        const nextList = cur.includes(startupId) ? cur.filter((x) => x !== startupId) : [...cur, startupId]
+        const nextList = on ? (cur.includes(startupId) ? cur : [...cur, startupId]) : cur.filter((x) => x !== startupId)
         return { ...s, saved: { ...s.saved, [s.currentUserId]: nextList } }
       })
+
+      setLocal(!wasSaved) // instant feedback
+
+      if (me?.remote && startup?.userId) {
+        const { error } = wasSaved
+          ? await supabase.from('saved_startups').delete().eq('investor_id', me.id).eq('startup_id', startup.userId)
+          : await supabase.from('saved_startups').insert({ investor_id: me.id, startup_id: startup.userId })
+        // 23505 = already saved (for example from another tab): not an error for the person.
+        if (error && error.code !== '23505') {
+          setLocal(wasSaved) // roll back
+          toast(error.message)
+        }
+      }
     },
 
     // Opens (or creates) a conversation for the current user with a peer. Returns its id.
@@ -1244,7 +1287,9 @@ export function StoreProvider({ children }) {
         // Real account: saved in Supabase, so it is the same on every device.
         const at = nowISO()
         setRemoteNotifs((n) => n.map((x) => (ids.includes(x.id) && !x.read_at ? { ...x, read_at: at } : x)))
-        supabase.from('notifications').update({ read_at: at }).in('id', ids).is('read_at', null)
+        const dbIds = ids.filter((id) => UUID_RE.test(id)) // message notifications are calculated, not stored
+        if (!dbIds.length) return
+        supabase.from('notifications').update({ read_at: at }).in('id', dbIds).is('read_at', null)
           .then(({ error }) => { if (error) console.error('Mark read failed:', error.message) })
         return
       }
@@ -1292,9 +1337,31 @@ export function useNotifications() {
   const { state, user, entity, remoteNotifs } = useStore()
 
   return useMemo(() => {
+    // New messages: one notification per chat with unseen messages (real and demo chats), opening that exact chat.
+    // These are calculated, not stored. They disappear as soon as the chat is opened and the messages are seen.
+    const seenMsgs = new Set(state.readMessages?.[user?.id] || [])
+    const isUnseen = (m) => m.from === 'peer' && !m.seenAt && (m.rid || (m.id && !seenMsgs.has(m.id)))
+    const msgNotifs = !user ? [] : state.conversations.filter((c) => c.ownerId === user.id).flatMap((c) => {
+      const fresh = c.messages.filter(isUnseen)
+      if (!fresh.length) return []
+      const last = fresh[fresh.length - 1]
+      return [{
+        id: `n-msg-${c.id}-${last.rid || last.id || last.at}`,
+        live: true,
+        icon: 'chat',
+        text: fresh.length > 1 ? `${c.peer.name} sent you ${fresh.length} messages` : `${c.peer.name} sent you a message`,
+        sub: (last.text || '').slice(0, 70),
+        to: '/app/messages?c=' + c.id,
+        at: last.at,
+      }]
+    })
+
     // Real accounts: read the saved notifications. Demo accounts keep the old calculated ones below.
     if (user?.remote) {
-      return remoteNotifs.map((n) => ({ id: n.id, icon: n.icon, text: n.title, sub: n.body || '', to: n.link || '/app', at: n.created_at, unread: !n.read_at }))
+      return [
+        ...remoteNotifs.map((n) => ({ id: n.id, icon: n.icon, text: n.title, sub: n.body || '', to: n.link || '/app', at: n.created_at, unread: !n.read_at })),
+        ...msgNotifs.map((n) => ({ ...n, unread: true })),
+      ].sort((a, b) => new Date(b.at) - new Date(a.at))
     }
     if (!user || !entity) return []
     const read = state.readNotifs[user.id] || []
@@ -1307,7 +1374,9 @@ export function useNotifications() {
       })
       state.requests.filter((r) => r.studentId === entity.id && r.status === 'accepted').forEach((r) => {
         const m = state.mentors.find((x) => x.id === r.mentorId)
-        out.push({ id: 'n-' + r.id, icon: 'check', text: `${m?.name} accepted your mentorship request`, sub: 'Start the conversation in Messages', to: '/app/messages', at: r.at })
+        // Open the actual chat with that mentor when it exists, otherwise the Messages page.
+        const chat = state.conversations.find((c) => c.ownerId === user.id && (c.peer?.refId === m?.id || c.peer?.name === m?.name))
+        out.push({ id: 'n-' + r.id, icon: 'check', text: `${m?.name} accepted your mentorship request`, sub: 'Start the conversation in Messages', to: chat ? '/app/messages?c=' + chat.id : '/app/messages', at: r.at })
       })
     }
 
@@ -1315,6 +1384,14 @@ export function useNotifications() {
       state.requests.filter((r) => r.mentorId === entity.id && r.status === 'pending').forEach((r) => {
         const st = state.students.find((x) => x.id === r.studentId)
         out.push({ id: 'n-' + r.id, icon: 'user', text: `${st?.name} requested mentorship`, sub: r.message.slice(0, 70) + '…', to: '/app', at: r.at })
+      })
+      // Students who registered for a session I host.
+      state.sessions.filter((se) => se.hostId === entity.id && new Date(se.date) > new Date()).forEach((se) => {
+        se.registered.forEach((sid) => {
+          const st = state.students.find((x) => x.id === sid)
+          if (!st) return
+          out.push({ id: `n-reg-${se.id}-${sid}`, icon: 'user', text: `${st.name} registered for your session`, sub: se.title, to: '/app/sessions', at: nowISO() })
+        })
       })
     }
 
@@ -1324,16 +1401,10 @@ export function useNotifications() {
       }))
     }
 
-    if (user.role === 'startup') {
-      state.conversations.filter((c) => c.ownerId === user.id && c.peer.kind === 'investor').forEach((c) => {
-        out.push({ id: 'n-' + c.id, icon: 'chat', text: `${c.peer.name} messaged you`, sub: c.peer.subtitle, to: '/app/messages?c=' + c.id, at: c.messages.at(-1)?.at })
-      })
-    }
-
     if (user.role === 'investor') {
       state.startups.slice(0, 2).forEach((s) => out.push({ id: 'n-new-' + s.id, icon: 'rocket', text: `${s.name} matches your sectors`, sub: s.tagline.slice(0, 70), to: '/app/startups/' + s.id, at: nowISO() }))
     }
 
-    return out.sort((a, b) => new Date(b.at) - new Date(a.at)).map((n) => ({ ...n, unread: !read.includes(n.id) }))
+    return [...out, ...msgNotifs].sort((a, b) => new Date(b.at) - new Date(a.at)).map((n) => ({ ...n, unread: n.live || !read.includes(n.id) }))
   }, [state, user, entity, remoteNotifs])
 }

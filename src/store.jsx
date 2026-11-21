@@ -438,7 +438,8 @@ export function StoreProvider({ children }) {
     })
 
     // `hidden` = remote conversation ids I deleted that have nothing new since.
-    const mergeConvs = (list, hidden = []) => setState((s) => {
+    // prune = true (full reload only): also drop my real chats that no longer exist on the server.
+    const mergeConvs = (list, hidden = [], prune = false) => setState((s) => {
       const base = s.conversations.filter((c) => !(c.ownerId === meId && c.remoteId && hidden.includes(c.remoteId)))
       const matched = new Set()
       const merged = list.map((n) => {
@@ -449,7 +450,7 @@ export function StoreProvider({ children }) {
         const keepSystem = old.messages.filter((m) => m.from === 'system' && (!clr || new Date(m.at) > new Date(clr)))
         return { ...n, id: old.id, messages: [...keepSystem, ...n.messages] }
       })
-      return { ...s, conversations: [...merged, ...base.filter((c) => !matched.has(c.id))] }
+      return { ...s, conversations: [...merged, ...base.filter((c) => !matched.has(c.id) && !(prune && c.ownerId === meId && c.remoteId))] }
     })
 
     let warnedExpired = false
@@ -528,14 +529,16 @@ export function StoreProvider({ children }) {
               ...s,
               sessions: [
                 ...sess.map((x) => sessFromRow(x, (sessRegs || []).filter((r) => r.session_id === x.id), takenBy[x.id], linkBy[x.id])),
-                ...s.sessions.filter((x) => !sessIds.has(x.id)),
+                // Keep local-only (demo) sessions, but drop real ones that no longer exist on the server.
+                ...s.sessions.filter((x) => !sessIds.has(x.id) && !x.remote),
               ],
             }
           })
         }
 
-        const { data: convs } = await supabase.from('conversations').select('*')
-        if (!alive || !convs?.length) return
+        const { data: convs, error: convErr } = await supabase.from('conversations').select('*')
+        if (!alive || convErr) return
+        if (!convs?.length) { mergeConvs([], [], true); return } // no chats on the server: drop any stale cached ones
 
         const { data: msgs } = await supabase.from('messages').select('*').in('conversation_id', convs.map((c) => c.id)).order('created_at', { ascending: true })
         const otherIds = convs.map((c) => (c.user_a === meId ? c.user_b : c.user_a))
@@ -553,7 +556,7 @@ export function StoreProvider({ children }) {
           return toLocal(c, profile, visible)
         }).filter(Boolean)
 
-        mergeConvs(list, hidden)
+        mergeConvs(list, hidden, true)
       } catch { /* offline: keep what we already have */ }
     }
 

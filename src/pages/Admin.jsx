@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { Check, CheckCircle2, Clock, Eye, FileText, LogOut, RotateCcw, Search, ShieldCheck, Users, X, XCircle } from 'lucide-react'
 import { Avatar, Empty, Logo, Modal, ROLES, RoleBadge, StatusBadge, ThemeToggle, ago, fmtDate, fmtTime } from '../components/ui'
 import { useStore } from '../store'
+import { DEMO_ENABLED } from '../lib/flags'
 
 const CHECKS = {
   investor: ['Name on ID matches account', 'ID document is valid and not expired', 'Proof of funds / accreditation looks genuine', 'No duplicate or flagged accounts'],
@@ -42,7 +43,7 @@ function Review({ u, onClose }) {
     onClose()
   }
 
-  // Open the tab first (so browsers don't block it), then point it at the signed URL.
+  
   // docUrl already shows its own error toast on failure.
   const openFile = async (f) => {
     const w = window.open('', '_blank')
@@ -77,14 +78,14 @@ function Review({ u, onClose }) {
               ? u.files.map((f) => (
                   <div key={f.path} className="doc-preview">
                     <div className="doc-thumb" />
-                    <div className="grow"><div className="small bold">{f.label}</div><div className="xs muted">Uploaded with application · encrypted</div></div>
+                    <div className="grow"><div className="small bold">{f.label}</div><div className="xs muted">Uploaded with application · private</div></div>
                     <button className="btn btn-ghost btn-sm" onClick={() => openFile(f)}><Eye size={14} /> View</button>
                   </div>
                 ))
               : (u.docs || []).map((d) => (
                   <div key={d} className="doc-preview">
                     <div className="doc-thumb" />
-                    <div className="grow"><div className="small bold">{d}</div><div className="xs muted">Uploaded with application · encrypted</div></div>
+                    <div className="grow"><div className="small bold">{d}</div><div className="xs muted">Uploaded with application · private</div></div>
                     <button className="btn btn-ghost btn-sm" onClick={() => setPreview(d)}><Eye size={14} /> View</button>
                   </div>
                 ))}
@@ -147,14 +148,15 @@ export default function Admin() {
   const [q, setQ] = useState('')
   const [openId, setOpenId] = useState(null)
 
-  // Load real applications from Supabase when an admin opens this page.
+  
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (user?.role === 'admin') refreshApplications() }, [user?.id])
 
   if (!user) return <Navigate to="/login" replace />
   if (user.role !== 'admin') return <Navigate to="/app" replace />
 
-  const apps = state.users.filter((u) => u.role !== 'admin')
+  // A real admin sees real applications only (no sample people).
+  const apps = state.users.filter((u) => u.role !== 'admin' && (!user.remote || u.remote))
   const counts = { pending: apps.filter((u) => u.status === 'pending').length, approved: apps.filter((u) => u.status === 'approved').length, rejected: apps.filter((u) => u.status === 'rejected').length }
   const list = apps
     .filter((u) => tab === 'all' || u.status === tab)
@@ -169,7 +171,7 @@ export default function Admin() {
         <div className="row"><Logo to="/admin" /><span className="badge" style={{ background: 'rgba(255,255,255,.1)', color: '#fff' }}>Admin console</span></div>
         <div className="row">
           <ThemeToggle />
-          <button className="btn btn-sm" onClick={() => { resetDemo(); nav('/login') }}><RotateCcw size={14} /> Reset demo</button>
+          {DEMO_ENABLED && <button className="btn btn-sm" onClick={() => { resetDemo(); nav('/login') }}><RotateCcw size={14} /> Reset demo</button>}
           <button className="btn btn-sm" onClick={() => { logout(); nav('/login') }}><LogOut size={14} /> Log out</button>
         </div>
       </div>

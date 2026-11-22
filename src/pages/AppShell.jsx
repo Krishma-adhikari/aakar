@@ -88,7 +88,6 @@ export default function AppShell() {
         <div className="side-section">Menu</div>
         {links}
         <div className="side-user">
-          {/* NEW: avatar + name open the profile */}
           <span onClick={() => nav('/app/profile')} style={{ cursor: 'pointer', display: 'inline-flex' }} title="My profile">
             <Avatar p={user} size="sm" />
           </span>

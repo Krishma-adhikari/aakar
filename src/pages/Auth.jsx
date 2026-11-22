@@ -7,22 +7,9 @@ import {
 import { Avatar, ChipSelect, Logo, Mountains, ROLES, RoleBadge, StatusBadge, ThemeToggle, Toggle, fmtDate, fmtTime } from '../components/ui'
 import { KEYWORDS, SECTORS, STAGES } from '../data/demo'
 import { useStore } from '../store'
+import { DEMO_ENABLED } from '../lib/flags'
+import { checkPassword } from '../lib/validation'
 
-/* ---------- Strong password helpers (used on the registration form only) ---------- */
-function checkPassword(pw = '') {
-  const rules = [
-    ['At least 8 characters', pw.length >= 8],
-    ['An uppercase letter', /[A-Z]/.test(pw)],
-    ['A lowercase letter', /[a-z]/.test(pw)],
-    ['A number', /\d/.test(pw)],
-    ['A symbol (! @ # $ …)', /[^A-Za-z0-9]/.test(pw)],
-  ]
-  const passed = rules.filter(([, ok]) => ok).length
-  const common = /^(password|12345678|123456789|qwerty|abc123|letmein|iloveyou)/i.test(pw) || /^(.)\1+$/.test(pw)
-  const score = common ? Math.min(passed, 2) : passed + (pw.length >= 12 ? 1 : 0)
-  const level = !pw ? 0 : score <= 2 ? 1 : score <= 4 ? 2 : score === 5 ? 3 : 4
-  return { rules, level, label: ['', 'Weak', 'Fair', 'Good', 'Strong'][level], ok: passed === rules.length && !common }
-}
 
 function generatePassword(len = 14) {
   const sets = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '!@#$%&*?']
@@ -395,9 +382,11 @@ export function Register() {
                 </div>
               ))}
             </div>
-            <button type="button" className="btn btn-soft btn-sm mt-4" onClick={() => { setFiles({}); setDocs(Object.fromEntries(cfg.docs.map((d) => [d.key, d.label.split(' ')[0] + '_sample.pdf']))) }}>
-              <Sparkles size={14} /> Demo: attach sample files
-            </button>
+            {DEMO_ENABLED && (
+              <button type="button" className="btn btn-soft btn-sm mt-4" onClick={() => { setFiles({}); setDocs(Object.fromEntries(cfg.docs.map((d) => [d.key, d.label.split(' ')[0] + '_sample.pdf']))) }}>
+                <Sparkles size={14} /> Demo: attach sample files
+              </button>
+            )}
             <div className="card mt-6" style={{ padding: 16, background: 'var(--blue-50)', borderColor: 'var(--primary-100)', display: 'flex', gap: 12 }}>
               <Lock size={18} color="var(--blue)" style={{ flexShrink: 0, marginTop: 2 }} />
               <div className="small">Your files are used for verification only. Use clear photos or PDF scans.</div>
@@ -562,7 +551,7 @@ export function Pending() {
         </h1>
         <p className="muted mt-3" style={{ fontSize: 16 }}>
           {user.status === 'approved' ? 'Welcome to Aakar. Everything is unlocked for you now.'
-            : user.status === 'rejected' ? <>Reason: <b style={{ color: 'var(--ink)' }}>{user.rejectReason || 'Documents could not be verified.'}</b> You can register again with updated documents.</>
+            : user.status === 'rejected' ? <>Reason: <b style={{ color: 'var(--ink)' }}>{user.rejectReason || 'Documents could not be verified.'}</b> To send a new application, register again with the same email and password.</>
               : <>Hi {user.name.split(' ')[0]}, an Aakar admin is checking your details and documents. We’ll email <b style={{ color: 'var(--ink)' }}>{user.email}</b> when you’re approved.</>}
         </p>
 
@@ -582,7 +571,7 @@ export function Pending() {
         <div className="row wrap mt-6">
           {user.status === 'approved' && <button className="btn btn-primary btn-lg" onClick={() => nav('/app')}>Enter Aakar <ArrowRight size={18} /></button>}
           {user.status === 'rejected' && <Link to="/register" className="btn btn-primary btn-lg">Register again</Link>}
-          {user.status === 'pending' && (
+          {DEMO_ENABLED && user.status === 'pending' && (
             <div className="card" style={{ padding: 16, background: 'var(--gold-50)', borderColor: 'transparent', display: 'flex', gap: 12, alignItems: 'center', width: '100%' }}>
               <Sparkles size={20} color="var(--amber)" />
               <div className="grow small"><b>Hackathon demo:</b> log in as admin to approve this account, then come back.</div>

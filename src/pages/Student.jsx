@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Bell, CalendarDays, Check, Clock, ExternalLink, MapPin, MessageCircle, Sparkles, Star, Users, Video } from 'lucide-react'
-import { Avatar, Empty, Modal, fmtTime } from '../components/ui'
+import { Avatar, Empty, Modal, fmtTime, nptParts } from '../components/ui'
 import { useStore, validateMeetingLink } from '../store'
 import { recommendMentors, recommendSessions } from '../lib/recommend'
 
@@ -71,7 +71,8 @@ export function MeetingLinkEditor({ se }) {
 
 export function SessionCard({ se, host, studentId, onToggle, matched, footer }) {
   const { user, claimPayment } = useStore()
-  const d = new Date(se.date)
+  // Date tile and time are always shown in Nepal time, whatever timezone the viewer is in.
+  const p = nptParts(se.date)
   const reg = studentId && se.registered.includes(studentId)
   const going = se.taken ?? se.registered.length
   const left = se.seats - going
@@ -88,7 +89,7 @@ export function SessionCard({ se, host, studentId, onToggle, matched, footer }) 
 
   return (
     <div className="card session-card">
-      <div className="date-tile"><div className="m">{d.toLocaleString('en-US', { month: 'short' })}</div><div className="d">{d.getDate()}</div><div className="xs muted">{d.toLocaleString('en-US', { weekday: 'short' })}</div></div>
+      <div className="date-tile"><div className="m">{p.month}</div><div className="d">{p.day}</div><div className="xs muted">{p.weekday}</div></div>
       <div className="grow">
         <div className="row wrap" style={{ gap: 6 }}>
           <span className="chip chip-match">{se.keyword}</span>
@@ -249,7 +250,7 @@ export function StudentSessions() {
 
   return (
     <div className="page">
-      <div className="page-head"><div><h1>Mentorship sessions</h1><p>Group sessions hosted by Nepali professionals around the world. Some are free, some are paid.</p></div></div>
+      <div className="page-head"><div><h1>Mentorship sessions</h1><p>Group sessions hosted by Nepali professionals around the world. Some are free, some are paid. All times are in Nepal time (NPT).</p></div></div>
       <div className="filters">
         {[['mine', 'For my interests'], ['all', 'All sessions'], ['going', 'I’m going']].map(([k, l]) => <button key={k} className={`chip chip-btn ${filter === k ? 'active' : ''}`} onClick={() => setFilter(k)}>{l}</button>)}
       </div>
@@ -285,6 +286,8 @@ export function Mentors() {
           const req = reqFor(m.id)
           const conv = convFor(m.id)
           const score = Math.round(relevance * 100)
+          // New mentors have no rating yet: show "New" instead of an empty gold star.
+          const hasRating = typeof m.rating === 'number' && m.rating > 0
           return (
             <div key={m.id} className="card card-pad stack" style={{ gap: 14 }}>
               <div className="row" style={{ alignItems: 'flex-start' }}>
@@ -295,7 +298,12 @@ export function Mentors() {
               <p className="small" style={{ color: 'var(--ink-2)' }}>{m.bio}</p>
               <div className="row wrap" style={{ gap: 6 }}>{m.fields.map((f) => <span key={f} className={`chip ${common.includes(f) ? 'chip-match' : ''}`}>{common.includes(f) && <Check size={12} />} {f}</span>)}</div>
               {reasons.length > 0 && <div className="xs muted row" style={{ gap: 4 }}><Sparkles size={11} /> Why this mentor: {reasons.join(', ')}</div>}
-              <div className="row xs muted" style={{ gap: 14 }}><span className="row" style={{ gap: 4 }}><Star size={13} color="var(--gold)" fill="var(--gold)" /> {m.rating}</span><span>{m.mentees} mentees</span><span>{m.hours} hrs/month</span></div>
+              <div className="row xs muted" style={{ gap: 14 }}>
+                {hasRating
+                  ? <span className="row" style={{ gap: 4 }}><Star size={13} color="var(--gold)" fill="var(--gold)" /> {m.rating}</span>
+                  : <span className="badge badge-amber">New</span>}
+                <span>{m.mentees} mentees</span><span>{m.hours} hrs/month</span>
+              </div>
               {req?.status === 'accepted' ? <button className="btn btn-success btn-block" onClick={() => {
                 const id = conv ? conv.id : startChat({ name: m.name, initials: m.initials, color: m.color, subtitle: `${m.title}, ${m.company}`, kind: 'mentor', refId: m.id, userId: m.userId })
                 nav('/app/messages?c=' + id)

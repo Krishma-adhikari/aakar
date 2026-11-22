@@ -211,6 +211,24 @@ export const money = (n) => {
 }
 export const fmtDate = (iso, opts = { month: 'short', day: 'numeric' }) => new Date(iso).toLocaleDateString('en-US', opts)
 export const fmtTime = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+const NPT = 'Asia/Kathmandu'
+// Date or time parts in Nepal time, whatever time zone this browser is in.
+export const fmtNPT = (iso, opts) => new Date(iso).toLocaleString('en-US', { timeZone: NPT, ...opts })
+// "8:30 PM NPT" for people in Nepal; "8:30 PM NPT · 1:15 AM GMT-5 your time" for everyone else.
+// Month and day in Nepal time, for the session date tiles on the landing page.
+export const nptParts = (iso) => ({
+  month: fmtNPT(iso, { month: 'short' }),
+  day: fmtNPT(iso, { day: 'numeric' }),
+})
+export const sessionWhen = (iso) => {
+  const d = new Date(iso)
+  const hm = { hour: 'numeric', minute: '2-digit' }
+  const npt = d.toLocaleTimeString('en-US', { ...hm, timeZone: NPT })
+  const mine = d.toLocaleTimeString('en-US', hm)
+  if (npt === mine) return `${npt} NPT`
+  return `${npt} NPT · ${d.toLocaleTimeString('en-US', { ...hm, timeZoneName: 'short' })} your time`
+}
 export const ago = (iso) => {
   const s = (Date.now() - new Date(iso)) / 1000
   if (s < 0) return 'in ' + Math.ceil(-s / 86400) + 'd'

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Bell, CalendarDays, CalendarPlus, Check, GraduationCap, Heart, MessageCircle, Plus, Sparkles, Star, Users, Wrench, X } from 'lucide-react'
-import { Avatar, Empty, Modal, ago } from '../components/ui'
+import { Avatar, Empty, Modal, ago, fmtNPT, sessionWhen } from '../components/ui'
 import { KEYWORDS } from '../data/demo'
 import { useStore, validateMeetingLink } from '../store'
 import { recommendStudents } from '../lib/recommend'
@@ -97,7 +97,7 @@ export function ProHome() {
           <div className="card card-pad">
             <div className="row-between"><div className="xs faint bold">MY UPCOMING SESSIONS</div><Link to="/app/sessions" className="xs link">Manage</Link></div>
             {mySessions.length === 0 && <p className="small muted mt-3">No sessions scheduled.</p>}
-            {mySessions.map((s) => <div key={s.id} className="list-row"><CalendarDays size={18} color="var(--primary)" /><div className="grow"><div className="small bold">{s.title}</div><div className="xs muted">{new Date(s.date).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · {s.registered.length} going</div></div></div>)}
+            {mySessions.map((s) => <div key={s.id} className="list-row"><CalendarDays size={18} color="var(--primary)" /><div className="grow"><div className="small bold">{s.title}</div><div className="xs muted">{fmtNPT(s.date, { weekday: 'short', month: 'short', day: 'numeric' })}, {sessionWhen(s.date)} · {s.registered.length} going</div></div></div>)}
           </div>
           <div className="card card-pad" style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-100)' }}>
             <Wrench size={20} color="var(--blue)" />

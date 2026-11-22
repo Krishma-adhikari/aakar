@@ -2,6 +2,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as demo from './data/demo'
 import { supabase } from './lib/supabase'
+import { DEMO_ENABLED } from './lib/flags'
+import { normPrize, validateMeetingLink } from './lib/validation'
 
 const KEY = 'aakar-demo-v2'
 
@@ -11,32 +13,56 @@ const FAKE_REPLIES = false
 
 const Ctx = createContext(null)
 
+// Sample data is used in demo mode only. A real (production) build starts empty,
+// so real members never see made-up startups, mentors, sessions or accounts.
+const seed = (list) => (DEMO_ENABLED ? list : [])
+
 const initial = () => ({
-  users: demo.seedUsers,
+  users: seed(demo.seedUsers),
   currentUserId: null,
-  startups: demo.startups,
-  investors: demo.investors,
-  mentors: demo.mentors,
-  students: demo.students,
-  organizations: demo.organizations,
-  sessions: demo.sessions,
-  requests: demo.mentorshipRequests,
-  challenges: demo.challenges,
-  conversations: demo.seedConversations,
-  saved: { 'u-inv': ['s4'] },
+  startups: seed(demo.startups),
+  investors: seed(demo.investors),
+  mentors: seed(demo.mentors),
+  students: seed(demo.students),
+  organizations: seed(demo.organizations),
+  sessions: seed(demo.sessions),
+  requests: seed(demo.mentorshipRequests),
+  challenges: seed(demo.challenges),
+  conversations: seed(demo.seedConversations),
+  saved: DEMO_ENABLED ? { 'u-inv': ['s4'] } : {},
   readNotifs: {},
   readMessages: {}, // { [userId]: [ids of demo messages already read] }
   blocked: {}, // { [userId]: [peer refIds (demo) or user ids] }
+  seededAt: new Date().toISOString(), // when the sample dates were generated (demo mode only)
 })
 
-// TEMPORARY demo shortcut: ?as=student (etc.) signs in as that demo account on load.
+// Demo-only shortcut: ?as=student (etc.) signs in as that sample account. Never active in production.
 const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', organization: 'u-org', admin: 'u-admin' }
+
+// Sample session dates are made when the demo first loads. Move them forward by the whole days
+// that have passed since, so the demo never ends up with only past sessions.
+function shiftDemoDates(st) {
+  if (!st.seededAt) return { ...st, seededAt: new Date().toISOString() }
+  const days = Math.floor((Date.now() - new Date(st.seededAt).getTime()) / 864e5)
+  if (!(days > 0)) return st
+  const shift = (iso) => new Date(new Date(iso).getTime() + days * 864e5).toISOString()
+  return {
+    ...st,
+    seededAt: shift(st.seededAt),
+    sessions: st.sessions.map((se) => (se.remote ? se : { ...se, date: shift(se.date) })),
+  }
+}
 
 function load() {
   let st = initial()
+  if (!DEMO_ENABLED) {
+    // Production keeps nothing about members in this browser. Remove what older versions saved.
+    try { localStorage.removeItem(KEY) } catch { /* ignore */ }
+    return st
+  }
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) st = { ...st, ...JSON.parse(raw) }
+    if (raw) st = shiftDemoDates({ ...st, ...JSON.parse(raw) })
   } catch { /* storage unavailable */ }
   const as = new URLSearchParams(window.location.search).get('as')
   if (DEMO_AS[as]) st = { ...st, currentUserId: DEMO_AS[as] }
@@ -47,12 +73,6 @@ const uid = (p) => p + Math.random().toString(36).slice(2, 9)
 const nowISO = () => new Date().toISOString()
 const notOlderThanADay = (iso) => new Date(iso) > new Date(new Date().getTime() - 864e5)
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-// A prize is a positive whole number, otherwise there is no prize.
-const normPrize = (v) => {
-  const n = Number(v)
-  return Number.isInteger(n) && n > 0 ? n : null
-}
 
 export const initialsOf = (name = '') => name.replace(/^(Dr\.|Er\.|CA)\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || 'A'
 
@@ -72,25 +92,8 @@ export function demoPresence(peer) {
   return { online: h % 3 === 0, lastSeenAt: new Date(bucket - ((h % 170) + 10) * 60000).toISOString() }
 }
 
-/* ---------- Meeting link validation ---------- */
-
-// Only https links on these sites are accepted (the database enforces the same rule).
-const LINK_HOSTS = ['zoom.us', 'meet.google.com', 'teams.microsoft.com', 'teams.live.com']
-
-// Returns { ok: true, url } (url is '' when the box is empty) or { ok: false, error }.
-export function validateMeetingLink(raw) {
-  const v = (raw || '').trim()
-  if (!v) return { ok: true, url: '' }
-  let u
-  try { u = new URL(v) } catch { return { ok: false, error: 'That doesn’t look like a link. Paste the full address, starting with https://' } }
-  if (u.protocol !== 'https:') return { ok: false, error: 'The link must start with https://' }
-  if (u.username || u.password) return { ok: false, error: 'This link is not allowed. Paste the plain meeting link.' }
-  const h = u.hostname.toLowerCase()
-  if (!LINK_HOSTS.some((d) => h === d || h.endsWith('.' + d))) {
-    return { ok: false, error: 'Only Zoom, Google Meet or Microsoft Teams links are accepted (zoom.us, meet.google.com, teams.microsoft.com, teams.live.com).' }
-  }
-  return { ok: true, url: u.toString() }
-}
+// Meeting link validation moved to lib/validation.js (so it can be tested). Re-exported for the pages.
+export { validateMeetingLink }
 
 /* ---------- Supabase helpers ---------- */
 
@@ -120,6 +123,11 @@ function withRemote(s, rows) {
   rows.forEach((r) => byId.set(r.id, { ...byId.get(r.id), ...fromRow(r, byId.get(r.id)) }))
   const next = { ...s, users: [...byId.values()] }
   rows.forEach((r) => {
+    if (r.status !== 'approved' && !r.is_admin) {
+      // Not (or no longer) approved: they must not keep a listing.
+      next.users = next.users.map((x) => (x.id === r.id ? { ...x, refId: undefined } : x))
+      return
+    }
     if (r.status !== 'approved' || r.is_admin) return
     const u = next.users.find((x) => x.id === r.id)
     if (!u || u.refId) return
@@ -131,7 +139,16 @@ function withRemote(s, rows) {
   return next
 }
 
-// Used only if Supabase cannot be reached, so the demo never breaks.
+const ENTITY_LISTS = ['startups', 'investors', 'mentors', 'students', 'organizations']
+
+// Drop listings of real members who are no longer approved (or that I am no longer allowed to see).
+function pruneRemote(s, approvedIds) {
+  const next = { ...s }
+  ENTITY_LISTS.forEach((k) => { next[k] = s[k].filter((e) => !e.userId || approvedIds.has(e.userId)) })
+  return next
+}
+
+// Used only in demo mode if Supabase cannot be reached, so the demo never breaks.
 function registerLocal(setState, { role, name, email, password, profile, raw, docs }) {
   const u = { id: uid('u-'), role, name, email, password, status: 'pending', initials: initialsOf(name), color: pickColor(name), submittedAt: nowISO(), profile, raw, docs }
   setState((s) => ({ ...s, users: [...s.users, u], currentUserId: u.id }))
@@ -317,14 +334,17 @@ function buildEntity(user) {
     case 'student':
       return ['students', { ...base, institution: r.institution || user.profile?.Institution || '', level: r.level || user.profile?.Level || '', city: r.city || user.profile?.City || '', interests: r.interests || (user.profile?.Interests || '').split(',').map((s) => s.trim()).filter(Boolean), goal: r.goal || '' }]
     case 'professional':
-      return ['mentors', { ...base, title: r.title || user.profile?.Title || '', company: r.company || user.profile?.Company || '', location: r.country || user.profile?.Country || '', years: Number(r.years) || 5, fields: r.fields || (user.profile?.Expertise || '').split(',').map((s) => s.trim()).filter(Boolean), degree: r.degree || '', bio: r.bio || '', rating:null, mentees: 0, hours: Number(r.hours) || 4 }]
+      return ['mentors', { ...base, title: r.title || user.profile?.Title || '', company: r.company || user.profile?.Company || '', location: r.country || user.profile?.Country || '', years: Number(r.years) || 5, fields: r.fields || (user.profile?.Expertise || '').split(',').map((s) => s.trim()).filter(Boolean), degree: r.degree || '', bio: r.bio || '', rating:null, mentees: 0, hours: parseInt(r.hours, 10) || 4 }]
     case 'startup': {
       const name = r.startupName || user.profile?.['Startup name'] || user.name
       const ask = Number(String(r.ask || user.profile?.['Funding ask'] || '50000').replace(/[^\d]/g, '')) || 50000
       return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: [{ name: user.name, role: 'Founder', bg: '' }], traction: [{ k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }], tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
     }
-    case 'organization':
-      return ['organizations', { ...base, type: r.orgType || user.profile?.['Organization type'] || 'NGO', district: r.district || user.profile?.District || '' }]
+    case 'organization': {
+      // The listing carries the organization's name, not the contact person's.
+      const orgName = (r.orgName || user.profile?.['Organization name'] || '').trim() || user.name
+      return ['organizations', { ...base, name: orgName, initials: initialsOf(orgName), color: pickColor(orgName), contact: user.name, type: r.orgType || user.profile?.['Organization type'] || 'NGO', district: r.district || user.profile?.District || '' }]
+    }
     default:
       return [null, null]
   }
@@ -337,6 +357,7 @@ export function StoreProvider({ children }) {
   const [blockedRemote, setBlockedRemote] = useState([]) // user ids I blocked (from Supabase)
   const [toasts, setToasts] = useState([])
   const [remoteNotifs, setRemoteNotifs] = useState([]) // rows of the Supabase "notifications" table
+  const [authReady, setAuthReady] = useState(false) // true once we know whether a Supabase session exists
   const timers = useRef([])
   const stateRef = useRef(state)
   stateRef.current = state
@@ -344,9 +365,40 @@ export function StoreProvider({ children }) {
   const syncRef = useRef(null) // reloads shared data from Supabase (set while a real user is signed in)
   const clearsRef = useRef({}) // { [remote conversation id]: cleared_at } for chats I deleted
 
+  // Demo mode only. In production nothing about members is kept in this browser.
   useEffect(() => {
+    if (!DEMO_ENABLED) return
     try { localStorage.setItem(KEY, JSON.stringify(state)) } catch { /* ignore */ }
   }, [state])
+
+  // Restore a real login after a page reload. The Supabase session is the single source of truth.
+  useEffect(() => {
+    let alive = true
+    const done = () => { if (alive) setAuthReady(true) }
+const safety = setTimeout(done, 3000)
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      const sess = data?.session
+      if (!sess || stateRef.current.currentUserId) return
+      // The reset-password link signs the person in temporarily; do not log them into the app.
+      if (window.location.pathname.endsWith('/reset-password')) return
+      const { data: row } = await supabase.from('profiles').select('*').eq('id', sess.user.id).maybeSingle()
+      if (!alive || !row) return
+      setState((s) => ({ ...withRemote(s, [{ ...row, email: row.email || sess.user.email }]), currentUserId: row.id }))
+    }).catch(() => { /* offline: stay signed out */ }).finally(done)
+
+    // Signed out somewhere else (another tab, revoked token): sign out here too.
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event !== 'SIGNED_OUT') return
+      setState((s) => {
+        const me = s.users.find((x) => x.id === s.currentUserId)
+        if (!me?.remote) return s
+        return DEMO_ENABLED ? { ...s, currentUserId: null } : initial()
+      })
+    })
+
+    return () => { alive = false; clearTimeout(safety); sub.subscription.unsubscribe() }
+  }, [])
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
@@ -468,7 +520,12 @@ export function StoreProvider({ children }) {
         supabase.rpc('mark_all_delivered').then(({ error }) => { if (error) console.error('mark_all_delivered failed:', error.message) })
 
         const { data: profs } = await supabase.from('profiles').select('*').eq('status', 'approved')
-        if (alive && profs) setState((s) => withRemote(s, profs))
+        // My own row too, so an approval or rejection that happens while I am online shows up.
+        const { data: mine } = await supabase.from('profiles').select('*').eq('id', meId).maybeSingle()
+        if (alive && profs) {
+          const approvedIds = new Set(profs.map((p) => p.id))
+          setState((s) => withRemote(pruneRemote(s, approvedIds), mine && mine.status !== 'approved' ? [...profs, mine] : profs))
+        }
 
         // People I blocked, and chats I deleted (and when).
         const { data: blks } = await supabase.from('blocks').select('blocked_id').eq('blocker_id', meId)
@@ -480,7 +537,6 @@ export function StoreProvider({ children }) {
         const { data: nts, error: ntsErr } = await supabase.from('notifications').select('*').eq('user_id', meId).order('created_at', { ascending: false }).limit(50)
         // An empty list with no error usually means row-level security hides the rows; an error says what is wrong.
         if (ntsErr) console.error('Notifications load failed:', ntsErr.message)
-        else console.log('Notifications loaded:', nts?.length ?? 0, 'for', meId)
         if (alive && nts) setRemoteNotifs(nts)
 
         // My watchlist (investors). Row-level security returns only my own rows.
@@ -739,7 +795,7 @@ export function StoreProvider({ children }) {
     // Demo accounts are checked first (works offline). Everything else goes to Supabase.
     async login(email, password) {
       const em = email.trim().toLowerCase()
-      const local = state.users.find((x) => x.password && x.email.toLowerCase() === em)
+      const local = DEMO_ENABLED ? state.users.find((x) => x.password && x.email.toLowerCase() === em) : null
       if (local) {
         if (local.password !== password) return { error: 'Incorrect password.' }
         return { user: local }
@@ -771,37 +827,65 @@ export function StoreProvider({ children }) {
 
     logout() {
       supabase.auth.signOut().catch(() => { })
-      setState((s) => ({ ...s, currentUserId: null }))
+      // Production: forget everything about the previous member (messages, other members' data).
+      setState((s) => (DEMO_ENABLED ? { ...s, currentUserId: null } : initial()))
     },
 
     async register(data) {
       const { role, name, password, profile, raw, docs, files = [] } = data
       const email = data.email.trim()
-      if (state.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) return { error: 'An account with this email already exists.' }
+      if (DEMO_ENABLED && state.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) return { error: 'An account with this email already exists.' }
       try {
+        let userId
+        let resubmit = false
+
         const { data: res, error } = await supabase.auth.signUp({ email, password })
-        if (error) throw error
-        if (!res.session) return { error: 'Supabase is asking for email confirmation. Turn off "Confirm email" in Supabase (Authentication, Sign In / Providers, Email).' }
+        if (error) {
+          const exists = error.code === 'user_already_exists' || /already (been )?registered/i.test(error.message || '')
+          if (!exists) throw error
+          // The email already has an account. Only a REJECTED application may be sent again,
+          // and only by someone who knows the password.
+          const { data: si, error: siErr } = await supabase.auth.signInWithPassword({ email, password })
+          if (siErr) return { error: 'An account with this email already exists. Log in, or use “Forgot password”.' }
+          const { data: old } = await supabase.from('profiles').select('status').eq('id', si.user.id).maybeSingle()
+          if (old && old.status !== 'rejected') {
+            await supabase.auth.signOut()
+            return { error: 'An account with this email already exists. Please log in.' }
+          }
+          userId = si.user.id
+          resubmit = !!old // no profile row means an earlier sign-up stopped half way: create it now
+        } else {
+          if (!res.session) return { error: 'Supabase is asking for email confirmation. Turn off "Confirm email" in Supabase (Authentication, Sign In / Providers, Email).' }
+          userId = res.user.id
+        }
 
         // Upload the real files into this user's own folder.
         const uploaded = []
         let failed = 0
         for (const f of files) {
           const ext = (f.file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '')
-          const path = `${res.user.id}/${f.key}-${Date.now()}.${ext}`
+          const path = `${userId}/${f.key}-${Date.now()}.${ext}`
           const { error: upErr } = await supabase.storage.from('kyc-docs').upload(path, f.file, { contentType: f.file.type, upsert: false })
           if (upErr) { console.error('Upload failed:', upErr.message); failed++; continue }
           uploaded.push({ key: f.key, label: f.label, name: f.file.name, path })
         }
 
         const row = {
-          id: res.user.id, full_name: name, role, email,
+          id: userId, full_name: name, role, email,
           country: raw?.country ?? null, bio: raw?.bio ?? null,
           keywords: raw?.interests || raw?.fields || raw?.sectors || [],
           details: { profile, raw, docs, files: uploaded },
         }
-        const { error: pErr } = await supabase.from('profiles').insert(row)
-        if (pErr) { await supabase.auth.signOut(); return { error: pErr.message } }
+
+        if (resubmit) {
+          const { error: rErr } = await supabase.rpc('resubmit_application', {
+            p_full_name: name, p_role: role, p_country: row.country, p_bio: row.bio, p_keywords: row.keywords, p_details: row.details,
+          })
+          if (rErr) { await supabase.auth.signOut(); return { error: rErr.message } }
+        } else {
+          const { error: pErr } = await supabase.from('profiles').insert(row)
+          if (pErr) { await supabase.auth.signOut(); return { error: pErr.message } }
+        }
 
         if (failed) toast(`${failed} file(s) could not be uploaded. The admin may ask you to send them again.`)
 
@@ -809,8 +893,10 @@ export function StoreProvider({ children }) {
         setState((s) => ({ ...s, users: [...s.users.filter((x) => x.id !== u.id), u], currentUserId: u.id }))
         return { user: u }
       } catch (err) {
-        if (err?.name === 'AuthRetryableFetchError' || err instanceof TypeError) return registerLocal(setState, { ...data, email })
-        return { error: err?.message || 'Could not create the account.' }
+        const offline = err?.name === 'AuthRetryableFetchError' || err instanceof TypeError
+        // Only the demo may fall back to a local, in-browser account. A real build must never do this.
+        if (DEMO_ENABLED && offline) return registerLocal(setState, { ...data, email })
+        return { error: offline ? 'Could not reach the server. Check your connection and try again.' : (err?.message || 'Could not create the account.') }
       }
     },
 
@@ -856,7 +942,14 @@ export function StoreProvider({ children }) {
         const { error } = await supabase.rpc('set_profile_status', { target: userId, new_status: 'rejected', reason })
         if (error) return { error: error.message }
       }
-      setState((s) => ({ ...s, users: s.users.map((x) => (x.id === userId ? { ...x, status: 'rejected', rejectReason: reason, reviewedAt: nowISO() } : x)) }))
+      setState((s) => {
+        const u = s.users.find((x) => x.id === userId)
+        const next = { ...s }
+        // A rejected member must not stay listed (startup card, mentor profile, ...).
+        if (u?.remote && u.refId) ENTITY_LISTS.forEach((k) => { next[k] = s[k].filter((e) => e.id !== u.refId) })
+        next.users = s.users.map((x) => (x.id === userId ? { ...x, status: 'rejected', rejectReason: reason, reviewedAt: nowISO(), refId: undefined } : x))
+        return next
+      })
       return {}
     },
 
@@ -1308,6 +1401,7 @@ export function StoreProvider({ children }) {
   const value = {
     state,
     user,
+    authReady,
     refreshChats,
     markSeen,
     retryMessage,
@@ -1405,7 +1499,7 @@ export function useNotifications() {
     }
 
     if (user.role === 'investor') {
-      state.startups.slice(0, 2).forEach((s) => out.push({ id: 'n-new-' + s.id, icon: 'rocket', text: `${s.name} matches your sectors`, sub: s.tagline.slice(0, 70), to: '/app/startups/' + s.id, at: nowISO() }))
+      state.startups.filter((s) => (entity.sectors || []).includes(s.sector)).slice(0, 2).forEach((s) => out.push({ id: 'n-new-' + s.id, icon: 'rocket', text: `${s.name} matches your sectors`, sub: s.tagline.slice(0, 70), to: '/app/startups/' + s.id, at: nowISO() }))
     }
 
     return [...out, ...msgNotifs].sort((a, b) => new Date(b.at) - new Date(a.at)).map((n) => ({ ...n, unread: n.live || !read.includes(n.id) }))

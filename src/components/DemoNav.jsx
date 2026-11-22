@@ -5,8 +5,9 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Compass, LogOut, ShieldCheck, X } from 'lucide-react'
 import { ROLES } from './ui'
 import { useStore } from '../store'
+import { DEMO_ENABLED } from '../lib/flags'
 
-export const DEMO_MODE = true
+export const DEMO_MODE = DEMO_ENABLED // false in production builds
 
 const ACCOUNTS = {
   investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', organization: 'u-org', admin: 'u-admin',
@@ -53,7 +54,7 @@ export default function DemoNav() {
   useEffect(() => {
     const params = new URLSearchParams(loc.search)
     const as = params.get('as')
-    if (!as || handled.current === loc.key) return
+    if (!DEMO_MODE || !as || handled.current === loc.key) return
     handled.current = loc.key
     if (ACCOUNTS[as]) setCurrent(ACCOUNTS[as])
     params.delete('as')

@@ -17,7 +17,7 @@ export default function HelpDesk() {
   const [posting, setPosting] = useState(false)
   const [answering, setAnswering] = useState(null)
   const [answer, setAnswer] = useState('')
-  const [form, setForm] = useState({ title: '', category: CATEGORIES[0], urgency: 'Medium', desc: '', tags: '' })
+  const [form, setForm] = useState({ title: '', category: CATEGORIES[0], urgency: 'Medium', desc: '', tags: '', prize: '' })
 
   const posterOf = (c) => state.startups.find((x) => x.id === c.posterId)
   const isMine = (c) => c.posterId === entity.id
@@ -28,10 +28,14 @@ export default function HelpDesk() {
   list = list.filter((c) => (!q || (c.title + c.desc).toLowerCase().includes(q.toLowerCase())) && (!cats.length || cats.includes(c.category)))
 
   const submitPost = () => {
+
+    postChallenge({ posterType: user.role === 'startup' ? 'startup' : 'organization', posterId: entity.id, title: form.title, category: form.category, urgency: form.urgency, desc: form.desc, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean), prize: form.prize })
+
     postChallenge({ posterType: 'startup', posterId: entity.id, title: form.title, category: form.category, urgency: form.urgency, desc: form.desc, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) })
+
     toast('Challenge posted. Professionals in that field will see it.')
     setPosting(false); setTab('mine')
-    setForm({ title: '', category: CATEGORIES[0], urgency: 'Medium', desc: '', tags: '' })
+    setForm({ title: '', category: CATEGORIES[0], urgency: 'Medium', desc: '', tags: '', prize: '' })
   }
 
   const submitAnswer = () => {
@@ -80,6 +84,7 @@ export default function HelpDesk() {
                   <div className="row wrap mt-2" style={{ gap: 6 }}>
                     <span className="badge badge-blue">{c.category}</span>
                     <span className={`badge ${URG[c.urgency]}`}>{c.urgency === 'High' && <AlertTriangle size={11} />} {c.urgency} urgency</span>
+                    {c.prize > 0 && <span className="badge badge-green">Prize: NPR {Number(c.prize).toLocaleString('en-IN')}</span>}
                     {c.tags.map((t) => <span key={t} className="chip">{t}</span>)}
                   </div>
                   <p className="small mt-3" style={{ color: 'var(--ink-2)' }}>{c.desc}</p>
@@ -114,6 +119,17 @@ export default function HelpDesk() {
             <div className="field"><label>Category</label><select className="select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></div>
             <div className="field"><label>Urgency</label><select className="select" value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value })}><option>High</option><option>Medium</option><option>Low</option></select></div>
             <div className="field span-2"><label>Details</label><textarea className="textarea" rows={5} value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} placeholder="What have you tried? What equipment, budget and internet do you have?" /></div>
+            <div className="field span-2">
+              <label>Prize (NPR, optional)</label>
+              <input
+                className="input"
+                type="text"
+                inputMode="numeric"
+                value={form.prize}
+                onChange={(e) => setForm({ ...form, prize: e.target.value.replace(/\D/g, '').slice(0, 9) })}
+                placeholder="e.g. 5000. Leave empty if there is no prize"
+              />
+            </div>
             <div className="field span-2"><label>Tags</label><input className="input" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="Comma separated, e.g. WordPress, Hosting" /></div>
           </div>
           <div className="row mt-4" style={{ justifyContent: 'flex-end' }}>

@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Eye, EyeOff, Landmark, MapPin, MessageCircle, TrendingUp, Users, Wrench } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, Landmark, MapPin, MessageCircle, Sparkles, TrendingUp, Users, Wrench } from 'lucide-react'
 import { Avatar, ChipSelect, Empty, Modal, money } from '../components/ui'
 import { KEYWORDS, SECTORS, STAGES } from '../data/demo'
 import { useStore } from '../store'
+import { recommendInvestors } from '../lib/recommend'
 import { StartupCard } from './Investor'
 
 export function StartupHome() {
@@ -72,6 +73,8 @@ export function InvestorsDirectory() {
   const [msg, setMsg] = useState('')
   const visible = state.investors.filter((i) => i.visible)
   const hidden = state.investors.length - visible.length
+  // Best-fit investors first: text matching on sectors, bio and your pitch, plus stage and ticket fit.
+  const ranked = recommendInvestors(s, visible)
 
   const send = () => {
     const cid = startChat({ name: pitching.name, initials: pitching.initials, color: pitching.color, subtitle: `${pitching.type} · ${pitching.location}`, kind: 'investor', refId: pitching.id }, `Intro request from ${s.name}`)
@@ -82,13 +85,14 @@ export function InvestorsDirectory() {
 
   return (
     <div className="page">
-      <div className="page-head"><div><h1>Investors</h1><p>Investors who chose to be visible to startups. {hidden > 0 && `${hidden} more are browsing privately.`}</p></div></div>
+      <div className="page-head"><div><h1>Investors</h1><p>Investors who chose to be visible to startups, best fit for {s.name} first. {hidden > 0 && `${hidden} more are browsing privately.`}</p></div></div>
       <div className="startup-grid">
-        {visible.map((i) => (
+        {ranked.map(({ item: i, reasons }) => (
           <div key={i.id} className="card card-pad stack" style={{ gap: 14 }}>
             <div className="row"><Avatar p={i} size="lg" /><div className="grow"><div className="bold" style={{ fontSize: 16 }}>{i.name}</div><div className="small muted">{i.type}</div><div className="xs muted row mt-1" style={{ gap: 4 }}><MapPin size={11} /> {i.location}</div></div></div>
             <p className="small" style={{ color: 'var(--ink-2)' }}>{i.bio}</p>
             <div className="row wrap" style={{ gap: 6 }}>{i.sectors.map((x) => <span key={x} className={`chip ${x === s.sector ? 'chip-match' : ''}`}>{x}</span>)}</div>
+            {reasons.length > 0 && <div className="xs muted row" style={{ gap: 4 }}><Sparkles size={11} /> Why this investor: {reasons.join(', ')}</div>}
             <div className="row-between small"><span className="muted">Ticket <b style={{ color: 'var(--ink)' }}>{i.ticket}</b></span><span className="muted">{i.deals} deals</span></div>
             <button className="btn btn-dark btn-block" onClick={() => { setPitching(i); setMsg(`Namaste! I’m ${s.founders[0].name}, founder of ${s.name}. ${s.tagline} We’re raising ${money(s.ask)} at ${s.stage} stage. Would you be open to a quick call?`) }}><MessageCircle size={16} /> Send intro</button>
           </div>

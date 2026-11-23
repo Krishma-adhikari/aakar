@@ -1,4 +1,5 @@
 // All data here is fictional demo data for the hackathon prototype.
+import { DEMO_ENABLED } from '../lib/flags'
 
 export const KEYWORDS = [
   'Computer Science', 'AI / ML', 'Data Science', 'Software Engineering', 'Medicine', 'Nursing',
@@ -176,8 +177,20 @@ export const students = [
   { id: 'st5', name: 'Prerana Dahal', initials: 'PD', color: '#6d4ae6', institution: 'Tribhuvan University', level: 'Master (1st year)', city: 'Kirtipur', interests: ['Public Health', 'Scholarships', 'Study in UK'], goal: 'Chevening scholarship for MPH.' },
 ]
 
+export const organizations = [
+  { id: 'o1', name: 'Shree Janajyoti Secondary School', initials: 'JS', color: '#2152d9', type: 'School', district: 'Sindhupalchok' },
+  { id: 'o2', name: 'Women for Green Hills', initials: 'WG', color: '#0f9f6e', type: 'NGO', district: 'Kaski' },
+  { id: 'o3', name: 'Sahara Youth Club', initials: 'SY', color: '#e8961e', type: 'Community org', district: 'Dang' },
+  { id: 'o4', name: 'Bagmati Rural Municipality', initials: 'BM', color: '#0891b2', type: 'Local government', district: 'Lalitpur' },
+]
+
+// A moment `offset` days from now at h:m Nepal time (UTC+05:45), whatever time zone the browser is in.
+
 const day = (offset, h = 19, m = 0) => {
-  const d = new Date(); d.setDate(d.getDate() + offset); d.setHours(h, m, 0, 0); return d.toISOString()
+  const base = new Date(Date.now() + offset * 864e5)
+  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(base) // YYYY-MM-DD
+  const pad = (n) => String(n).padStart(2, '0')
+  return new Date(`${ymd}T${pad(h)}:${pad(m)}:00+05:45`).toISOString()
 }
 
 export const sessions = [
@@ -202,7 +215,7 @@ export const challenges = [
 ]
 
 // Demo accounts (seed data). Password for all demo accounts: demo123
-export const seedUsers = [
+export const seedUsers = !DEMO_ENABLED ? [] : [
   { id: 'u-admin', email: 'admin@aakar.demo', password: 'demo123', role: 'admin', status: 'approved', name: 'Aakar Admin', initials: 'AA', color: '#0d1b45' },
   { id: 'u-inv', email: 'investor@aakar.demo', password: 'demo123', role: 'investor', status: 'approved', refId: 'i1', name: 'Rajesh Karki', initials: 'RK', color: '#2152d9', submittedAt: day(-20), docs: ['Passport.pdf', 'Accreditation_letter.pdf'] },
   { id: 'u-stu', email: 'student@aakar.demo', password: 'demo123', role: 'student', status: 'approved', refId: 'st1', name: 'Aarati Pokharel', initials: 'AP', color: '#e11d48', submittedAt: day(-15), docs: ['Student_ID.jpg', 'Enrollment_letter.pdf'] },

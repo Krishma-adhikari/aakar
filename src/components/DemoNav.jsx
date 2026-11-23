@@ -5,8 +5,9 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Compass, LogOut, ShieldCheck, X } from 'lucide-react'
 import { ROLES } from './ui'
 import { useStore } from '../store'
+import { DEMO_ENABLED } from '../lib/flags'
 
-export const DEMO_MODE = true
+export const DEMO_MODE = DEMO_ENABLED // false in production builds
 
 const ACCOUNTS = {
   investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', admin: 'u-admin',
@@ -26,15 +27,37 @@ export default function DemoNav() {
   const nav = useNavigate()
   const loc = useLocation()
   const [open, setOpen] = useState(false)
+  const panelRef = useRef(null)
   const role = user?.role
 
+
+  // Close the panel when the visitor clicks anywhere outside it, or presses Esc.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => {
+      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  // Shareable links: add ?as=student (or investor, startup, professional, organization, admin) to any URL.
+
   // Shareable links: add ?as=student (or investor, startup, professional, admin) to any URL.
+
   // The param is applied once, then removed so it can't override later role switches.
   const handled = useRef(null)
   useEffect(() => {
     const params = new URLSearchParams(loc.search)
     const as = params.get('as')
-    if (!as || handled.current === loc.key) return
+    if (!DEMO_MODE || !as || handled.current === loc.key) return
     handled.current = loc.key
     if (ACCOUNTS[as]) setCurrent(ACCOUNTS[as])
     params.delete('as')
@@ -63,7 +86,7 @@ export default function DemoNav() {
         </button>
       )}
       {open && (
-        <div className="demo-panel">
+        <div className="demo-panel" ref={panelRef}>
           <div className="row-between" style={{ padding: '14px 16px', borderBottom: '1px solid var(--line)' }}>
             <div>
               <div className="bold">Demo navigator</div>

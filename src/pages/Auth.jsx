@@ -1,12 +1,46 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, ArrowRight, Check, CheckCircle2, Clock, Eye, EyeOff, FileText, Loader2, Lock, Mail, ShieldCheck,
-  ShieldAlert, Sparkles, UserCheck, XCircle,
+  ArrowLeft, ArrowRight, Check, CheckCircle2, Circle, Clock, Eye, EyeOff, FileText, Loader2, Lock, Mail, ShieldCheck,
+  ShieldAlert, Sparkles, Upload as UploadIcon, UserCheck, XCircle,
 } from 'lucide-react'
-import { Avatar, ChipSelect, Logo, Mountains, ROLES, RoleBadge, StatusBadge, ThemeToggle, Toggle, Upload, fmtDate, fmtTime } from '../components/ui'
+import { Avatar, ChipSelect, Logo, Mountains, ROLES, RoleBadge, StatusBadge, ThemeToggle, Toggle, fmtDate, fmtTime } from '../components/ui'
 import { KEYWORDS, SECTORS, STAGES } from '../data/demo'
 import { useStore } from '../store'
+import { DEMO_ENABLED } from '../lib/flags'
+import { checkPassword } from '../lib/validation'
+
+
+function generatePassword(len = 14) {
+  const sets = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '!@#$%&*?']
+  const all = sets.join('')
+  const rnd = (n) => crypto.getRandomValues(new Uint32Array(1))[0] % n
+  const chars = sets.map((s) => s[rnd(s.length)]) // one of each type
+  while (chars.length < len) chars.push(all[rnd(all.length)])
+  for (let i = chars.length - 1; i > 0; i--) { const j = rnd(i + 1);[chars[i], chars[j]] = [chars[j], chars[i]] }
+  return chars.join('')
+}
+
+const STRENGTH_COLORS = ['var(--line)', '#dc2626', 'var(--amber)', '#65a30d', 'var(--green)']
+
+function PasswordStrength({ value }) {
+  const { rules, level, label } = checkPassword(value)
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {[1, 2, 3, 4].map((i) => <span key={i} style={{ flex: 1, height: 5, borderRadius: 4, background: i <= level ? STRENGTH_COLORS[level] : 'var(--line)' }} />)}
+      </div>
+      <div className="xs bold mt-1" style={{ color: STRENGTH_COLORS[level], minHeight: 16 }}>{label ? `Password strength: ${label}` : 'Create a strong password'}</div>
+      <div className="xs muted mt-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+        {rules.map(([text, ok]) => (
+          <span key={text} className="row" style={{ gap: 5, color: ok ? 'var(--green)' : undefined }}>
+            {ok ? <Check size={12} /> : <Circle size={10} />} {text}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 /* ---------- Role-specific registration config ---------- */
 const COUNTRIES = ['USA', 'UK', 'Australia', 'Canada', 'Japan', 'South Korea', 'Germany', 'UAE', 'Qatar', 'India', 'Nepal', 'Other']
@@ -129,6 +163,38 @@ export function RoleSelect() {
   )
 }
 
+/* ---------- File picker (keeps the real File so it can be uploaded to Supabase Storage) ---------- */
+const MAX_MB = 10
+const OK_TYPES = ['application/pdf', 'image/jpeg', 'image/png']
+
+function FileUpload({ label, hint, required, file, onFile }) {
+  const ref = useRef(null)
+  const [err, setErr] = useState('')
+  const pick = (e) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    if (!OK_TYPES.includes(f.type)) { setErr('Use a PDF, JPG or PNG file.'); return }
+    if (f.size > MAX_MB * 1024 * 1024) { setErr(`The file is larger than ${MAX_MB} MB.`); return }
+    setErr('')
+    onFile(f.name, f)
+  }
+  return (
+    <div className="card" style={{ padding: 18, display: 'flex', gap: 16, alignItems: 'center', borderRadius: 18, borderStyle: 'dashed' }}>
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--blue-50)', color: 'var(--blue)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+        {file ? <Check size={20} /> : <UploadIcon size={20} />}
+      </div>
+      <div className="grow">
+        <div className="bold small">{label} {required && <span className="req">*</span>}</div>
+        <div className="xs muted">{file ? file : hint}</div>
+        {err && <div className="xs mt-1" style={{ color: '#dc2626' }}>{err}</div>}
+      </div>
+      <input ref={ref} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={pick} style={{ display: 'none' }} />
+      <button type="button" className="btn btn-soft btn-sm" onClick={() => ref.current?.click()}>{file ? 'Replace' : 'Upload'}</button>
+    </div>
+  )
+}
+
 /* ---------- Registration form ---------- */
 function Field({ f, value, onChange, error }) {
   const common = { id: f.key, value: value ?? '', onChange: (e) => onChange(e.target.value), placeholder: f.placeholder, className: `${f.type === 'textarea' ? 'textarea' : f.type === 'select' ? 'select' : 'input'} ${error ? 'invalid' : ''}` }
@@ -164,7 +230,8 @@ export function Register() {
   const [step, setStep] = useState(0)
   const [acc, setAcc] = useState({ name: '', email: '', phone: '', password: '', confirm: '', agree: false })
   const [vals, setVals] = useState({})
-  const [docs, setDocs] = useState({})
+  const [docs, setDocs] = useState({}) // key -> file name (shown in the UI)
+  const [files, setFiles] = useState({}) // key -> real File (uploaded on submit)
   const [errors, setErrors] = useState({})
   const [showPw, setShowPw] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -176,7 +243,7 @@ export function Register() {
     if (step === 0) {
       if (acc.name.trim().length < 3) e.name = 'Enter your full name'
       if (!/^\S+@\S+\.\S+$/.test(acc.email)) e.email = 'Enter a valid email'
-      if (acc.password.length < 6) e.password = 'At least 6 characters'
+      if (!checkPassword(acc.password).ok) e.password = 'Use 8+ characters with upper and lower case, a number and a symbol'
       if (acc.confirm !== acc.password) e.confirm = 'Passwords do not match'
       if (!acc.agree) e.agree = 'Please accept to continue'
     }
@@ -201,20 +268,26 @@ export function Register() {
     return out
   }
 
-  const submit = () => {
+  const submit = async () => {
     setSubmitting(true)
-    setTimeout(() => {
-      const res = register({
-        role, name: acc.name.trim(), email: acc.email.trim(), password: acc.password,
-        profile: { Phone: acc.phone, ...profileSummary() }, raw: vals, docs: Object.values(docs),
-      })
-      setSubmitting(false)
-      if (res.error) { setErrors({ email: res.error }); setStep(0); return }
-      nav('/pending')
-    }, 900)
+    const res = await register({
+      role, name: acc.name.trim(), email: acc.email.trim(), password: acc.password,
+      profile: { Phone: acc.phone, ...profileSummary() }, raw: vals, docs: Object.values(docs),
+      files: Object.entries(files).map(([key, file]) => ({ key, file, label: cfg.docs.find((d) => d.key === key)?.label || key })),
+    })
+    setSubmitting(false)
+    if (res.error) { setErrors({ email: res.error }); setStep(0); return }
+    nav('/pending')
   }
 
   const setA = (k) => (e) => { const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value; setAcc((a) => ({ ...a, [k]: v })) }
+
+  const suggestPassword = () => {
+    const g = generatePassword()
+    setAcc((a) => ({ ...a, password: g, confirm: g }))
+    setShowPw(true) // show it so the user can see and save what was generated
+    setErrors((x) => ({ ...x, password: undefined, confirm: undefined }))
+  }
 
   return (
     <AuthLayout side={<>
@@ -242,19 +315,33 @@ export function Register() {
         {step === 0 && (
           <>
             <h1 style={{ fontSize: 32 }}>Create your {r.label.toLowerCase()} account</h1>
+
+
             <p className="muted mt-2">This is the person who will manage the account{role === 'startup' ? ' for your startup' : ''}.</p>
+
             <div className="grid-2 mt-6">
               <div className="field span-2"><label>Full name <span className="req">*</span></label><input className={`input ${errors.name ? 'invalid' : ''}`} value={acc.name} onChange={setA('name')} placeholder="As on your ID" />{errors.name && <span className="err">{errors.name}</span>}</div>
               <div className="field"><label>Email <span className="req">*</span></label><input className={`input ${errors.email ? 'invalid' : ''}`} value={acc.email} onChange={setA('email')} placeholder="you@example.com" />{errors.email && <span className="err">{errors.email}</span>}</div>
               <div className="field"><label>Phone</label><input className="input" value={acc.phone} onChange={setA('phone')} placeholder="+977 98XXXXXXXX" /></div>
               <div className="field"><label>Password <span className="req">*</span></label>
                 <div style={{ position: 'relative' }}>
-                  <input type={showPw ? 'text' : 'password'} className={`input ${errors.password ? 'invalid' : ''}`} value={acc.password} onChange={setA('password')} />
+                  <input type={showPw ? 'text' : 'password'} className={`input ${errors.password ? 'invalid' : ''}`} value={acc.password} onChange={setA('password')} autoComplete="new-password" />
                   <button type="button" onClick={() => setShowPw(!showPw)} style={{ position: 'absolute', right: 10, top: 11, border: 0, background: 'none', color: 'var(--faint)' }} aria-label="Show password">{showPw ? <EyeOff size={18} /> : <Eye size={18} />}</button>
                 </div>
                 {errors.password && <span className="err">{errors.password}</span>}
               </div>
-              <div className="field"><label>Confirm password <span className="req">*</span></label><input type="password" className={`input ${errors.confirm ? 'invalid' : ''}`} value={acc.confirm} onChange={setA('confirm')} />{errors.confirm && <span className="err">{errors.confirm}</span>}</div>
+              <div className="field"><label>Confirm password <span className="req">*</span></label>
+                <input type={showPw ? 'text' : 'password'} className={`input ${errors.confirm ? 'invalid' : ''}`} value={acc.confirm} onChange={setA('confirm')} autoComplete="new-password" />
+                {errors.confirm
+                  ? <span className="err">{errors.confirm}</span>
+                  : acc.confirm && acc.confirm !== acc.password
+                    ? <span className="err">Passwords do not match</span>
+                    : acc.confirm && <span className="hint" style={{ color: 'var(--green)' }}>Passwords match</span>}
+              </div>
+              <div className="span-2">
+                <PasswordStrength value={acc.password} />
+                <button type="button" className="btn btn-soft btn-sm mt-3" onClick={suggestPassword}><Sparkles size={14} /> Suggest a strong password</button>
+              </div>
               <label className="span-2 row small" style={{ alignItems: 'flex-start', gap: 10 }}>
                 <input type="checkbox" checked={acc.agree} onChange={setA('agree')} style={{ marginTop: 4 }} />
                 <span>I confirm the information I provide is accurate and agree to Aakar’s community guidelines and verification process.{errors.agree && <span className="err" style={{ display: 'block' }}>{errors.agree}</span>}</span>
@@ -280,17 +367,19 @@ export function Register() {
             <div className="stack mt-6">
               {cfg.docs.map((d) => (
                 <div key={d.key}>
-                  <Upload label={d.label} hint={d.hint} required={d.required} file={docs[d.key]} onFile={(name) => setDocs((p) => ({ ...p, [d.key]: name }))} />
+                  <FileUpload label={d.label} hint={d.hint} required={d.required} file={docs[d.key]} onFile={(name, file) => { setDocs((p) => ({ ...p, [d.key]: name })); setFiles((p) => ({ ...p, [d.key]: file })) }} />
                   {errors['doc-' + d.key] && <span className="err">Please upload this document</span>}
                 </div>
               ))}
             </div>
-            <button type="button" className="btn btn-soft btn-sm mt-4" onClick={() => setDocs(Object.fromEntries(cfg.docs.map((d) => [d.key, d.label.split(' ')[0] + '_sample.pdf'])))}>
-              <Sparkles size={14} /> Demo: attach sample files
-            </button>
+            {DEMO_ENABLED && (
+              <button type="button" className="btn btn-soft btn-sm mt-4" onClick={() => { setFiles({}); setDocs(Object.fromEntries(cfg.docs.map((d) => [d.key, d.label.split(' ')[0] + '_sample.pdf']))) }}>
+                <Sparkles size={14} /> Demo: attach sample files
+              </button>
+            )}
             <div className="card mt-6" style={{ padding: 16, background: 'var(--blue-50)', borderColor: 'var(--primary-100)', display: 'flex', gap: 12 }}>
               <Lock size={18} color="var(--blue)" style={{ flexShrink: 0, marginTop: 2 }} />
-              <div className="small">Files are encrypted and deleted 90 days after your account is verified. Use clear photos or PDF scans.</div>
+              <div className="small">Your files are used for verification only. Use clear photos or PDF scans.</div>
             </div>
           </>
         )}
@@ -338,10 +427,10 @@ export function Login() {
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(null) // { user, stage }
 
-  const run = (e, em = email, p = pw) => {
+  const run = async (e, em = email, p = pw) => {
     e?.preventDefault()
     setError('')
-    const res = login(em, p)
+    const res = await login(em, p)
     if (res.error) { setError(res.error); return }
     setChecking({ user: res.user, stage: 0 })
   }
@@ -385,18 +474,13 @@ export function Login() {
               <div className="field"><label>Email</label><div className="input-icon"><Mail size={17} /><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="username" /></div></div>
               <div className="field"><label>Password</label><div className="input-icon"><Lock size={17} /><input type="password" className="input" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" autoComplete="current-password" /></div></div>
               {error && <div className="err" style={{ fontSize: 13 }}>{error}</div>}
+
+              <div style={{ textAlign: 'right', marginTop: 8 }}>
+                <Link to="/forgot-password" className="small link">Forgot password?</Link>
+              </div>
               <button className="btn btn-primary btn-lg btn-block" type="submit">Log in <ArrowRight size={18} /></button>
             </form>
             <div className="mt-8">
-              <div className="row-between"><span className="xs faint bold">DEMO ACCOUNTS · PASSWORD demo123</span></div>
-              <div className="demo-accounts mt-3">
-                {DEMO.map(([em, role, label]) => (
-                  <button key={em} className="demo-acc" onClick={() => { setEmail(em); setPw('demo123'); run(null, em, 'demo123') }}>
-                    <span className="avatar sm" style={{ background: ROLES[role]?.color || '#0d1b45' }}>{(() => { const I = ROLES[role]?.icon || ShieldCheck; return <I size={14} /> })()}</span>
-                    <span className="grow"><span className="small bold" style={{ display: 'block' }}>{label}</span><span className="xs muted" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>{em}</span></span>
-                  </button>
-                ))}
-              </div>
             </div>
           </>
         ) : (
@@ -433,7 +517,7 @@ export function Pending() {
     const st = user.status
     return [
       { t: 'Application submitted', s: `${fmtDate(user.submittedAt)} at ${fmtTime(user.submittedAt)}`, state: 'done' },
-      { t: 'Documents received', s: `${user.docs?.length || 0} files uploaded securely`, state: 'done' },
+      { t: 'Documents received', s: `${user.docs?.length || 0} files submitted`, state: 'done' },
       { t: st === 'rejected' ? 'Review completed' : 'Admin review', s: st === 'pending' ? 'Usually within 24 hours' : st === 'rejected' ? 'Your application was not approved' : 'Approved', state: st === 'pending' ? 'current' : 'done' },
       { t: 'Access to Aakar', s: st === 'approved' ? 'You’re in!' : 'Unlocks after verification', state: st === 'approved' ? 'done' : '' },
     ]
@@ -457,7 +541,7 @@ export function Pending() {
         </h1>
         <p className="muted mt-3" style={{ fontSize: 16 }}>
           {user.status === 'approved' ? 'Welcome to Aakar. Everything is unlocked for you now.'
-            : user.status === 'rejected' ? <>Reason: <b style={{ color: 'var(--ink)' }}>{user.rejectReason || 'Documents could not be verified.'}</b> You can register again with updated documents.</>
+            : user.status === 'rejected' ? <>Reason: <b style={{ color: 'var(--ink)' }}>{user.rejectReason || 'Documents could not be verified.'}</b> To send a new application, register again with the same email and password.</>
               : <>Hi {user.name.split(' ')[0]}, an Aakar admin is checking your details and documents. We’ll email <b style={{ color: 'var(--ink)' }}>{user.email}</b> when you’re approved.</>}
         </p>
 
@@ -477,7 +561,7 @@ export function Pending() {
         <div className="row wrap mt-6">
           {user.status === 'approved' && <button className="btn btn-primary btn-lg" onClick={() => nav('/app')}>Enter Aakar <ArrowRight size={18} /></button>}
           {user.status === 'rejected' && <Link to="/register" className="btn btn-primary btn-lg">Register again</Link>}
-          {user.status === 'pending' && (
+          {DEMO_ENABLED && user.status === 'pending' && (
             <div className="card" style={{ padding: 16, background: 'var(--gold-50)', borderColor: 'transparent', display: 'flex', gap: 12, alignItems: 'center', width: '100%' }}>
               <Sparkles size={20} color="var(--amber)" />
               <div className="grow small"><b>Hackathon demo:</b> log in as admin to approve this account, then come back.</div>

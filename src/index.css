@@ -99,6 +99,7 @@
   color-scheme: dark;
 }
 
+
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
 html { scroll-behavior: smooth; }
@@ -298,7 +299,7 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .logo .sep { width: 1.5px; height: 24px; background: var(--line); margin: 0 4px; }
 .logo .deva { font-size: 16px; color: var(--muted); font-weight: 500; letter-spacing: 0; }
 
-.hero { position: relative; overflow: hidden; padding: 40px 0 0; }
+.hero { position: relative; overflow: hidden; padding: 20px 0 0; }
 .hero-grid { display: grid; grid-template-columns: 1fr 1.02fr; gap: 32px; align-items: center; position: relative; z-index: 2; min-height: 600px; }
 .hero h1 { font-size: clamp(42px, 4.9vw, 68px); font-weight: 800; letter-spacing: -.04em; line-height: 1.03; color: var(--navy); }
 :root[data-theme="dark"] .hero h1 { color: var(--ink); }
@@ -624,3 +625,27 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .demo-link:hover { background: var(--paper); color: var(--primary); }
 .demo-link.on { background: var(--primary-50); color: var(--primary); }
 @media (max-width: 600px) { .demo-panel { left: 10px; right: 10px; width: auto; bottom: 10px; } .demo-fab { left: 12px; bottom: 12px; } }
+
+/* Chat layout and scrolling fix */
+.chat {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.chat-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-head,
+.chat-input {
+  flex-shrink: 0;
+}

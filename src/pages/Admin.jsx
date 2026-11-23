@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Check, CheckCircle2, Clock, Eye, FileText, LogOut, RotateCcw, Search, ShieldCheck, Users, X, XCircle } from 'lucide-react'
 import { Avatar, Empty, Logo, Modal, ROLES, RoleBadge, StatusBadge, ThemeToggle, ago, fmtDate, fmtTime } from '../components/ui'
 import { useStore } from '../store'
+import { DEMO_ENABLED } from '../lib/flags'
 
 const CHECKS = {
   investor: ['Name on ID matches account', 'ID document is valid and not expired', 'Proof of funds / accreditation looks genuine', 'No duplicate or flagged accounts'],
@@ -13,7 +14,7 @@ const CHECKS = {
 const REASONS = ['Could not verify identity documents.', 'Documents are blurry or incomplete.', 'Registration number does not match records.', 'Duplicate account.', 'Other']
 
 function Review({ u, onClose }) {
-  const { approve, reject, entityOf, toast } = useStore()
+  const { approve, reject, entityOf, toast, docUrl } = useStore()
   const checks = CHECKS[u.role] || []
   const [done, setDone] = useState(u.status === 'approved' ? checks : [])
   const [rejecting, setRejecting] = useState(false)
@@ -26,6 +27,31 @@ function Review({ u, onClose }) {
     Location: entity.location || entity.city || entity.district, Type: entity.type, Institution: entity.institution, Title: entity.title, Company: entity.company,
     Sector: entity.sector, Stage: entity.stage, Interests: entity.interests?.join(', '), Expertise: entity.fields?.join(', '), Ticket: entity.ticket,
   }).filter(([, v]) => v)) : {})
+
+  const doApprove = async () => {
+    const r = await approve(u.id)
+    if (r?.error) return toast(r.error)
+    toast(`${u.name} approved. They can now use Aakar.`)
+    onClose()
+  }
+
+  const doReject = async () => {
+    const r = await reject(u.id, reason === 'Other' ? other || 'Other' : reason)
+    if (r?.error) return toast(r.error)
+    toast(`${u.name} rejected.`)
+    onClose()
+  }
+
+  
+  // docUrl already shows its own error toast on failure.
+  const openFile = async (f) => {
+    const w = window.open('', '_blank')
+    const url = await docUrl(f.path)
+    if (url && w) w.location.href = url
+    else w?.close()
+  }
+
+  const hasFiles = !!u.files?.length
 
   return (
     <div className="drawer-wrap" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -45,15 +71,23 @@ function Review({ u, onClose }) {
           </div>
 
           <hr className="divider" />
-          <div className="xs faint bold">DOCUMENTS ({u.docs?.length || 0})</div>
+          <div className="xs faint bold">DOCUMENTS ({u.files?.length || u.docs?.length || 0})</div>
           <div className="stack mt-3" style={{ gap: 10 }}>
-            {(u.docs || []).map((d) => (
-              <div key={d} className="doc-preview">
-                <div className="doc-thumb" />
-                <div className="grow"><div className="small bold">{d}</div><div className="xs muted">Uploaded with application · encrypted</div></div>
-                <button className="btn btn-ghost btn-sm" onClick={() => setPreview(d)}><Eye size={14} /> View</button>
-              </div>
-            ))}
+            {hasFiles
+              ? u.files.map((f) => (
+                  <div key={f.path} className="doc-preview">
+                    <div className="doc-thumb" />
+                    <div className="grow"><div className="small bold">{f.label}</div><div className="xs muted">Uploaded with application · private</div></div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => openFile(f)}><Eye size={14} /> View</button>
+                  </div>
+                ))
+              : (u.docs || []).map((d) => (
+                  <div key={d} className="doc-preview">
+                    <div className="doc-thumb" />
+                    <div className="grow"><div className="small bold">{d}</div><div className="xs muted">Uploaded with application · private</div></div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setPreview(d)}><Eye size={14} /> View</button>
+                  </div>
+                ))}
           </div>
 
           {checks.length > 0 && <>
@@ -75,7 +109,7 @@ function Review({ u, onClose }) {
 
           {!rejecting ? (
             <div className="row mt-8">
-              {u.status !== 'approved' && <button className="btn btn-success btn-lg grow" disabled={done.length < checks.length} onClick={() => { approve(u.id); toast(`${u.name} approved. They can now use Aakar.`); onClose() }}><CheckCircle2 size={18} /> Approve</button>}
+              {u.status !== 'approved' && <button className="btn btn-success btn-lg grow" disabled={done.length < checks.length} onClick={doApprove}><CheckCircle2 size={18} /> Approve</button>}
               {u.status !== 'rejected' && <button className="btn btn-danger-ghost btn-lg grow" onClick={() => setRejecting(true)}><XCircle size={18} /> Reject</button>}
             </div>
           ) : (
@@ -85,7 +119,7 @@ function Review({ u, onClose }) {
               {reason === 'Other' && <textarea className="textarea mt-2" value={other} onChange={(e) => setOther(e.target.value)} placeholder="Tell the applicant what to fix" />}
               <div className="row mt-4">
                 <button className="btn btn-ghost grow" onClick={() => setRejecting(false)}>Cancel</button>
-                <button className="btn btn-primary grow" onClick={() => { reject(u.id, reason === 'Other' ? other || 'Other' : reason); toast(`${u.name} rejected.`); onClose() }}>Confirm rejection</button>
+                <button className="btn btn-primary grow" onClick={doReject}>Confirm rejection</button>
               </div>
             </div>
           )}
@@ -106,17 +140,22 @@ function Review({ u, onClose }) {
 }
 
 export default function Admin() {
-  const { state, user, logout, resetDemo } = useStore()
+  const { state, user, logout, resetDemo, refreshApplications } = useStore()
   const nav = useNavigate()
   const [tab, setTab] = useState('pending')
   const [role, setRole] = useState('all')
   const [q, setQ] = useState('')
   const [openId, setOpenId] = useState(null)
 
+  
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (user?.role === 'admin') refreshApplications() }, [user?.id])
+
   if (!user) return <Navigate to="/login" replace />
   if (user.role !== 'admin') return <Navigate to="/app" replace />
 
-  const apps = state.users.filter((u) => u.role !== 'admin')
+  // A real admin sees real applications only (no sample people).
+  const apps = state.users.filter((u) => u.role !== 'admin' && (!user.remote || u.remote))
   const counts = { pending: apps.filter((u) => u.status === 'pending').length, approved: apps.filter((u) => u.status === 'approved').length, rejected: apps.filter((u) => u.status === 'rejected').length }
   const list = apps
     .filter((u) => tab === 'all' || u.status === tab)
@@ -131,7 +170,7 @@ export default function Admin() {
         <div className="row"><Logo to="/admin" /><span className="badge" style={{ background: 'rgba(255,255,255,.1)', color: '#fff' }}>Admin console</span></div>
         <div className="row">
           <ThemeToggle />
-          <button className="btn btn-sm" onClick={() => { resetDemo(); nav('/login') }}><RotateCcw size={14} /> Reset demo</button>
+          {DEMO_ENABLED && <button className="btn btn-sm" onClick={() => { resetDemo(); nav('/login') }}><RotateCcw size={14} /> Reset demo</button>}
           <button className="btn btn-sm" onClick={() => { logout(); nav('/login') }}><LogOut size={14} /> Log out</button>
         </div>
       </div>
@@ -166,7 +205,7 @@ export default function Admin() {
                       <td><div className="row"><Avatar p={u} size="sm" /><div><div className="bold">{u.name}</div><div className="xs muted">{u.email}</div></div></div></td>
                       <td><RoleBadge role={u.role} /></td>
                       <td className="mobile-hide small muted">{ago(u.submittedAt)}</td>
-                      <td className="mobile-hide"><span className="chip"><FileText size={12} /> {u.docs?.length || 0} files</span></td>
+                      <td className="mobile-hide"><span className="chip"><FileText size={12} /> {u.files?.length || u.docs?.length || 0} files</span></td>
                       <td><StatusBadge status={u.status} /></td>
                       <td style={{ textAlign: 'right' }}><button className="btn btn-ghost btn-sm">{u.status === 'pending' ? <>Review <Check size={14} /></> : 'View'}</button></td>
                     </tr>

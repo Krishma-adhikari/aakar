@@ -1,0 +1,685 @@
+--- a/src/store.jsx
++++ b/src/store.jsx
+@@ -2,6 +2,8 @@
+ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+ import * as demo from './data/demo'
+ import { supabase } from './lib/supabase'
++import { DEMO_ENABLED } from './lib/flags'
++import { normPrize, validateMeetingLink } from './lib/validation'
+ 
+ const KEY = 'aakar-demo-v2'
+ 
+@@ -11,32 +13,56 @@
+ 
+ const Ctx = createContext(null)
+ 
++// Sample data is used in demo mode only. A real (production) build starts empty,
++// so real members never see made-up startups, mentors, sessions or accounts.
++const seed = (list) => (DEMO_ENABLED ? list : [])
++
+ const initial = () => ({
+-  users: demo.seedUsers,
++  users: seed(demo.seedUsers),
+   currentUserId: null,
+-  startups: demo.startups,
+-  investors: demo.investors,
+-  mentors: demo.mentors,
+-  students: demo.students,
+-  organizations: demo.organizations,
+-  sessions: demo.sessions,
+-  requests: demo.mentorshipRequests,
+-  challenges: demo.challenges,
+-  conversations: demo.seedConversations,
+-  saved: { 'u-inv': ['s4'] },
++  startups: seed(demo.startups),
++  investors: seed(demo.investors),
++  mentors: seed(demo.mentors),
++  students: seed(demo.students),
++  organizations: seed(demo.organizations),
++  sessions: seed(demo.sessions),
++  requests: seed(demo.mentorshipRequests),
++  challenges: seed(demo.challenges),
++  conversations: seed(demo.seedConversations),
++  saved: DEMO_ENABLED ? { 'u-inv': ['s4'] } : {},
+   readNotifs: {},
+   readMessages: {}, // { [userId]: [ids of demo messages already read] }
+   blocked: {}, // { [userId]: [peer refIds (demo) or user ids] }
++  seededAt: new Date().toISOString(), // when the sample dates were generated (demo mode only)
+ })
+ 
+-// TEMPORARY demo shortcut: ?as=student (etc.) signs in as that demo account on load.
++// Demo-only shortcut: ?as=student (etc.) signs in as that sample account. Never active in production.
+ const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', organization: 'u-org', admin: 'u-admin' }
+ 
++// Sample session dates are made when the demo first loads. Move them forward by the whole days
++// that have passed since, so the demo never ends up with only past sessions.
++function shiftDemoDates(st) {
++  if (!st.seededAt) return { ...st, seededAt: new Date().toISOString() }
++  const days = Math.floor((Date.now() - new Date(st.seededAt).getTime()) / 864e5)
++  if (!(days > 0)) return st
++  const shift = (iso) => new Date(new Date(iso).getTime() + days * 864e5).toISOString()
++  return {
++    ...st,
++    seededAt: shift(st.seededAt),
++    sessions: st.sessions.map((se) => (se.remote ? se : { ...se, date: shift(se.date) })),
++  }
++}
++
+ function load() {
+   let st = initial()
++  if (!DEMO_ENABLED) {
++    // Production keeps nothing about members in this browser. Remove what older versions saved.
++    try { localStorage.removeItem(KEY) } catch { /* ignore */ }
++    return st
++  }
+   try {
+     const raw = localStorage.getItem(KEY)
+-    if (raw) st = { ...st, ...JSON.parse(raw) }
++    if (raw) st = shiftDemoDates({ ...st, ...JSON.parse(raw) })
+   } catch { /* storage unavailable */ }
+   const as = new URLSearchParams(window.location.search).get('as')
+   if (DEMO_AS[as]) st = { ...st, currentUserId: DEMO_AS[as] }
+@@ -48,12 +74,6 @@
+ const notOlderThanADay = (iso) => new Date(iso) > new Date(new Date().getTime() - 864e5)
+ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+ 
+-// A prize is a positive whole number, otherwise there is no prize.
+-const normPrize = (v) => {
+-  const n = Number(v)
+-  return Number.isInteger(n) && n > 0 ? n : null
+-}
+-
+ export const initialsOf = (name = '') => name.replace(/^(Dr\.|Er\.|CA)\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || 'A'
+ 
+ const pickColor = (s) => demo.COLORS[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % demo.COLORS.length]
+@@ -72,25 +92,8 @@
+   return { online: h % 3 === 0, lastSeenAt: new Date(bucket - ((h % 170) + 10) * 60000).toISOString() }
+ }
+ 
+-/* ---------- Meeting link validation ---------- */
+-
+-// Only https links on these sites are accepted (the database enforces the same rule).
+-const LINK_HOSTS = ['zoom.us', 'meet.google.com', 'teams.microsoft.com', 'teams.live.com']
+-
+-// Returns { ok: true, url } (url is '' when the box is empty) or { ok: false, error }.
+-export function validateMeetingLink(raw) {
+-  const v = (raw || '').trim()
+-  if (!v) return { ok: true, url: '' }
+-  let u
+-  try { u = new URL(v) } catch { return { ok: false, error: 'That doesn’t look like a link. Paste the full address, starting with https://' } }
+-  if (u.protocol !== 'https:') return { ok: false, error: 'The link must start with https://' }
+-  if (u.username || u.password) return { ok: false, error: 'This link is not allowed. Paste the plain meeting link.' }
+-  const h = u.hostname.toLowerCase()
+-  if (!LINK_HOSTS.some((d) => h === d || h.endsWith('.' + d))) {
+-    return { ok: false, error: 'Only Zoom, Google Meet or Microsoft Teams links are accepted (zoom.us, meet.google.com, teams.microsoft.com, teams.live.com).' }
+-  }
+-  return { ok: true, url: u.toString() }
+-}
++// Meeting link validation moved to lib/validation.js (so it can be tested). Re-exported for the pages.
++export { validateMeetingLink }
+ 
+ /* ---------- Supabase helpers ---------- */
+ 
+@@ -120,6 +123,11 @@
+   rows.forEach((r) => byId.set(r.id, { ...byId.get(r.id), ...fromRow(r, byId.get(r.id)) }))
+   const next = { ...s, users: [...byId.values()] }
+   rows.forEach((r) => {
++    if (r.status !== 'approved' && !r.is_admin) {
++      // Not (or no longer) approved: they must not keep a listing.
++      next.users = next.users.map((x) => (x.id === r.id ? { ...x, refId: undefined } : x))
++      return
++    }
+     if (r.status !== 'approved' || r.is_admin) return
+     const u = next.users.find((x) => x.id === r.id)
+     if (!u || u.refId) return
+@@ -131,7 +139,16 @@
+   return next
+ }
+ 
+-// Used only if Supabase cannot be reached, so the demo never breaks.
++const ENTITY_LISTS = ['startups', 'investors', 'mentors', 'students', 'organizations']
++
++// Drop listings of real members who are no longer approved (or that I am no longer allowed to see).
++function pruneRemote(s, approvedIds) {
++  const next = { ...s }
++  ENTITY_LISTS.forEach((k) => { next[k] = s[k].filter((e) => !e.userId || approvedIds.has(e.userId)) })
++  return next
++}
++
++// Used only in demo mode if Supabase cannot be reached, so the demo never breaks.
+ function registerLocal(setState, { role, name, email, password, profile, raw, docs }) {
+   const u = { id: uid('u-'), role, name, email, password, status: 'pending', initials: initialsOf(name), color: pickColor(name), submittedAt: nowISO(), profile, raw, docs }
+   setState((s) => ({ ...s, users: [...s.users, u], currentUserId: u.id }))
+@@ -317,14 +334,17 @@
+     case 'student':
+       return ['students', { ...base, institution: r.institution || user.profile?.Institution || '', level: r.level || user.profile?.Level || '', city: r.city || user.profile?.City || '', interests: r.interests || (user.profile?.Interests || '').split(',').map((s) => s.trim()).filter(Boolean), goal: r.goal || '' }]
+     case 'professional':
+-      return ['mentors', { ...base, title: r.title || user.profile?.Title || '', company: r.company || user.profile?.Company || '', location: r.country || user.profile?.Country || '', years: Number(r.years) || 5, fields: r.fields || (user.profile?.Expertise || '').split(',').map((s) => s.trim()).filter(Boolean), degree: r.degree || '', bio: r.bio || '', rating:null, mentees: 0, hours: Number(r.hours) || 4 }]
++      return ['mentors', { ...base, title: r.title || user.profile?.Title || '', company: r.company || user.profile?.Company || '', location: r.country || user.profile?.Country || '', years: Number(r.years) || 5, fields: r.fields || (user.profile?.Expertise || '').split(',').map((s) => s.trim()).filter(Boolean), degree: r.degree || '', bio: r.bio || '', rating:null, mentees: 0, hours: parseInt(r.hours, 10) || 4 }]
+     case 'startup': {
+       const name = r.startupName || user.profile?.['Startup name'] || user.name
+       const ask = Number(String(r.ask || user.profile?.['Funding ask'] || '50000').replace(/[^\d]/g, '')) || 50000
+       return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: [{ name: user.name, role: 'Founder', bg: '' }], traction: [{ k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }], tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
+     }
+-    case 'organization':
+-      return ['organizations', { ...base, type: r.orgType || user.profile?.['Organization type'] || 'NGO', district: r.district || user.profile?.District || '' }]
++    case 'organization': {
++      // The listing carries the organization's name, not the contact person's.
++      const orgName = (r.orgName || user.profile?.['Organization name'] || '').trim() || user.name
++      return ['organizations', { ...base, name: orgName, initials: initialsOf(orgName), color: pickColor(orgName), contact: user.name, type: r.orgType || user.profile?.['Organization type'] || 'NGO', district: r.district || user.profile?.District || '' }]
++    }
+     default:
+       return [null, null]
+   }
+@@ -337,6 +357,7 @@
+   const [blockedRemote, setBlockedRemote] = useState([]) // user ids I blocked (from Supabase)
+   const [toasts, setToasts] = useState([])
+   const [remoteNotifs, setRemoteNotifs] = useState([]) // rows of the Supabase "notifications" table
++  const [authReady, setAuthReady] = useState(false) // true once we know whether a Supabase session exists
+   const timers = useRef([])
+   const stateRef = useRef(state)
+   stateRef.current = state
+@@ -344,10 +365,40 @@
+   const syncRef = useRef(null) // reloads shared data from Supabase (set while a real user is signed in)
+   const clearsRef = useRef({}) // { [remote conversation id]: cleared_at } for chats I deleted
+ 
++  // Demo mode only. In production nothing about members is kept in this browser.
+   useEffect(() => {
++    if (!DEMO_ENABLED) return
+     try { localStorage.setItem(KEY, JSON.stringify(state)) } catch { /* ignore */ }
+   }, [state])
+ 
++  // Restore a real login after a page reload. The Supabase session is the single source of truth.
++  useEffect(() => {
++    let alive = true
++    const done = () => { if (alive) setAuthReady(true) }
++
++    supabase.auth.getSession().then(async ({ data }) => {
++      const sess = data?.session
++      if (!sess || stateRef.current.currentUserId) return
++      // The reset-password link signs the person in temporarily; do not log them into the app.
++      if (window.location.pathname.endsWith('/reset-password')) return
++      const { data: row } = await supabase.from('profiles').select('*').eq('id', sess.user.id).maybeSingle()
++      if (!alive || !row) return
++      setState((s) => ({ ...withRemote(s, [{ ...row, email: row.email || sess.user.email }]), currentUserId: row.id }))
++    }).catch(() => { /* offline: stay signed out */ }).finally(done)
++
++    // Signed out somewhere else (another tab, revoked token): sign out here too.
++    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
++      if (event !== 'SIGNED_OUT') return
++      setState((s) => {
++        const me = s.users.find((x) => x.id === s.currentUserId)
++        if (!me?.remote) return s
++        return DEMO_ENABLED ? { ...s, currentUserId: null } : initial()
++      })
++    })
++
++    return () => { alive = false; sub.subscription.unsubscribe() }
++  }, [])
++
+   useEffect(() => () => timers.current.forEach(clearTimeout), [])
+ 
+   const toast = useCallback((msg) => {
+@@ -468,7 +519,12 @@
+         supabase.rpc('mark_all_delivered').then(({ error }) => { if (error) console.error('mark_all_delivered failed:', error.message) })
+ 
+         const { data: profs } = await supabase.from('profiles').select('*').eq('status', 'approved')
+-        if (alive && profs) setState((s) => withRemote(s, profs))
++        // My own row too, so an approval or rejection that happens while I am online shows up.
++        const { data: mine } = await supabase.from('profiles').select('*').eq('id', meId).maybeSingle()
++        if (alive && profs) {
++          const approvedIds = new Set(profs.map((p) => p.id))
++          setState((s) => withRemote(pruneRemote(s, approvedIds), mine && mine.status !== 'approved' ? [...profs, mine] : profs))
++        }
+ 
+         // People I blocked, and chats I deleted (and when).
+         const { data: blks } = await supabase.from('blocks').select('blocked_id').eq('blocker_id', meId)
+@@ -480,7 +536,6 @@
+         const { data: nts, error: ntsErr } = await supabase.from('notifications').select('*').eq('user_id', meId).order('created_at', { ascending: false }).limit(50)
+         // An empty list with no error usually means row-level security hides the rows; an error says what is wrong.
+         if (ntsErr) console.error('Notifications load failed:', ntsErr.message)
+-        else console.log('Notifications loaded:', nts?.length ?? 0, 'for', meId)
+         if (alive && nts) setRemoteNotifs(nts)
+ 
+         // My watchlist (investors). Row-level security returns only my own rows.
+@@ -739,7 +794,7 @@
+     // Demo accounts are checked first (works offline). Everything else goes to Supabase.
+     async login(email, password) {
+       const em = email.trim().toLowerCase()
+-      const local = state.users.find((x) => x.password && x.email.toLowerCase() === em)
++      const local = DEMO_ENABLED ? state.users.find((x) => x.password && x.email.toLowerCase() === em) : null
+       if (local) {
+         if (local.password !== password) return { error: 'Incorrect password.' }
+         return { user: local }
+@@ -771,37 +826,65 @@
+ 
+     logout() {
+       supabase.auth.signOut().catch(() => { })
+-      setState((s) => ({ ...s, currentUserId: null }))
++      // Production: forget everything about the previous member (messages, other members' data).
++      setState((s) => (DEMO_ENABLED ? { ...s, currentUserId: null } : initial()))
+     },
+ 
+     async register(data) {
+       const { role, name, password, profile, raw, docs, files = [] } = data
+       const email = data.email.trim()
+-      if (state.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) return { error: 'An account with this email already exists.' }
++      if (DEMO_ENABLED && state.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) return { error: 'An account with this email already exists.' }
+       try {
++        let userId
++        let resubmit = false
++
+         const { data: res, error } = await supabase.auth.signUp({ email, password })
+-        if (error) throw error
+-        if (!res.session) return { error: 'Supabase is asking for email confirmation. Turn off "Confirm email" in Supabase (Authentication, Sign In / Providers, Email).' }
++        if (error) {
++          const exists = error.code === 'user_already_exists' || /already (been )?registered/i.test(error.message || '')
++          if (!exists) throw error
++          // The email already has an account. Only a REJECTED application may be sent again,
++          // and only by someone who knows the password.
++          const { data: si, error: siErr } = await supabase.auth.signInWithPassword({ email, password })
++          if (siErr) return { error: 'An account with this email already exists. Log in, or use “Forgot password”.' }
++          const { data: old } = await supabase.from('profiles').select('status').eq('id', si.user.id).maybeSingle()
++          if (old && old.status !== 'rejected') {
++            await supabase.auth.signOut()
++            return { error: 'An account with this email already exists. Please log in.' }
++          }
++          userId = si.user.id
++          resubmit = !!old // no profile row means an earlier sign-up stopped half way: create it now
++        } else {
++          if (!res.session) return { error: 'Supabase is asking for email confirmation. Turn off "Confirm email" in Supabase (Authentication, Sign In / Providers, Email).' }
++          userId = res.user.id
++        }
+ 
+         // Upload the real files into this user's own folder.
+         const uploaded = []
+         let failed = 0
+         for (const f of files) {
+           const ext = (f.file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '')
+-          const path = `${res.user.id}/${f.key}-${Date.now()}.${ext}`
++          const path = `${userId}/${f.key}-${Date.now()}.${ext}`
+           const { error: upErr } = await supabase.storage.from('kyc-docs').upload(path, f.file, { contentType: f.file.type, upsert: false })
+           if (upErr) { console.error('Upload failed:', upErr.message); failed++; continue }
+           uploaded.push({ key: f.key, label: f.label, name: f.file.name, path })
+         }
+ 
+         const row = {
+-          id: res.user.id, full_name: name, role, email,
++          id: userId, full_name: name, role, email,
+           country: raw?.country ?? null, bio: raw?.bio ?? null,
+           keywords: raw?.interests || raw?.fields || raw?.sectors || [],
+           details: { profile, raw, docs, files: uploaded },
+         }
+-        const { error: pErr } = await supabase.from('profiles').insert(row)
+-        if (pErr) { await supabase.auth.signOut(); return { error: pErr.message } }
++
++        if (resubmit) {
++          const { error: rErr } = await supabase.rpc('resubmit_application', {
++            p_full_name: name, p_role: role, p_country: row.country, p_bio: row.bio, p_keywords: row.keywords, p_details: row.details,
++          })
++          if (rErr) { await supabase.auth.signOut(); return { error: rErr.message } }
++        } else {
++          const { error: pErr } = await supabase.from('profiles').insert(row)
++          if (pErr) { await supabase.auth.signOut(); return { error: pErr.message } }
++        }
+ 
+         if (failed) toast(`${failed} file(s) could not be uploaded. The admin may ask you to send them again.`)
+ 
+@@ -809,8 +892,10 @@
+         setState((s) => ({ ...s, users: [...s.users.filter((x) => x.id !== u.id), u], currentUserId: u.id }))
+         return { user: u }
+       } catch (err) {
+-        if (err?.name === 'AuthRetryableFetchError' || err instanceof TypeError) return registerLocal(setState, { ...data, email })
+-        return { error: err?.message || 'Could not create the account.' }
++        const offline = err?.name === 'AuthRetryableFetchError' || err instanceof TypeError
++        // Only the demo may fall back to a local, in-browser account. A real build must never do this.
++        if (DEMO_ENABLED && offline) return registerLocal(setState, { ...data, email })
++        return { error: offline ? 'Could not reach the server. Check your connection and try again.' : (err?.message || 'Could not create the account.') }
+       }
+     },
+ 
+@@ -856,7 +941,14 @@
+         const { error } = await supabase.rpc('set_profile_status', { target: userId, new_status: 'rejected', reason })
+         if (error) return { error: error.message }
+       }
+-      setState((s) => ({ ...s, users: s.users.map((x) => (x.id === userId ? { ...x, status: 'rejected', rejectReason: reason, reviewedAt: nowISO() } : x)) }))
++      setState((s) => {
++        const u = s.users.find((x) => x.id === userId)
++        const next = { ...s }
++        // A rejected member must not stay listed (startup card, mentor profile, ...).
++        if (u?.remote && u.refId) ENTITY_LISTS.forEach((k) => { next[k] = s[k].filter((e) => e.id !== u.refId) })
++        next.users = s.users.map((x) => (x.id === userId ? { ...x, status: 'rejected', rejectReason: reason, reviewedAt: nowISO(), refId: undefined } : x))
++        return next
++      })
+       return {}
+     },
+ 
+@@ -1308,6 +1400,7 @@
+   const value = {
+     state,
+     user,
++    authReady,
+     refreshChats,
+     markSeen,
+     retryMessage,
+@@ -1405,7 +1498,7 @@
+     }
+ 
+     if (user.role === 'investor') {
+-      state.startups.slice(0, 2).forEach((s) => out.push({ id: 'n-new-' + s.id, icon: 'rocket', text: `${s.name} matches your sectors`, sub: s.tagline.slice(0, 70), to: '/app/startups/' + s.id, at: nowISO() }))
++      state.startups.filter((s) => (entity.sectors || []).includes(s.sector)).slice(0, 2).forEach((s) => out.push({ id: 'n-new-' + s.id, icon: 'rocket', text: `${s.name} matches your sectors`, sub: s.tagline.slice(0, 70), to: '/app/startups/' + s.id, at: nowISO() }))
+     }
+ 
+     return [...out, ...msgNotifs].sort((a, b) => new Date(b.at) - new Date(a.at)).map((n) => ({ ...n, unread: n.live || !read.includes(n.id) }))
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -1,7 +1,8 @@
+ import { lazy, Suspense, useEffect } from 'react'
+ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+ import { StoreProvider, useStore } from './store'
+-import DemoNav from './components/DemoNav' // TEMPORARY: no-login navigation
++import DemoNav from './components/DemoNav' // demo mode only (see lib/flags.js)
++import { DEMO_ENABLED } from './lib/flags'
+ 
+ // Pages are code-split so each one loads only when visited.
+ // Helper for modules that use named exports instead of a default export.
+@@ -54,6 +55,21 @@
+   return pages[user.role] || <Navigate to={fallback} replace />
+ }
+ 
++// Only approved members may open the app. Everyone else goes to the status page.
++function RequireApproved({ children }) {
++  const { user } = useStore()
++  if (!user) return <Navigate to="/login" replace />
++  if (user.role === 'admin') return <Navigate to="/admin" replace />
++  if (user.status !== 'approved') return <Navigate to="/pending" replace />
++  return children
++}
++
++// Wait until we know whether the browser still has a login, so a reload does not bounce you to /login.
++function Gate({ children }) {
++  const { authReady } = useStore()
++  return authReady ? children : <PageLoader />
++}
++
+ function ScrollTop() {
+   const { pathname } = useLocation()
+   useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+@@ -70,9 +86,9 @@
+       {/* BASE_URL follows vite.config: '/aakar/' locally, '/' on Vercel */}
+       <BrowserRouter basename={import.meta.env.BASE_URL}>
+         <ScrollTop />
+-        <DemoNav />
++        {DEMO_ENABLED && <DemoNav />}
+         <Suspense fallback={<PageLoader />}>
+-          <Routes>
++          <Gate><Routes>
+             <Route path="/" element={<Landing />} />
+             <Route path="/register" element={<RoleSelect />} />
+             <Route path="/register/:role" element={<Register />} />
+@@ -82,7 +98,7 @@
+             <Route path="/pending" element={<Pending />} />
+             <Route path="/admin" element={<Admin />} />
+ 
+-            <Route path="/app" element={<AppShell />}>
++            <Route path="/app" element={<RequireApproved><AppShell /></RequireApproved>}>
+               <Route
+                 index
+                 element={
+@@ -123,7 +139,7 @@
+             </Route>
+ 
+             <Route path="*" element={<Navigate to="/" replace />} />
+-          </Routes>
++          </Routes></Gate>
+         </Suspense>
+       </BrowserRouter>
+     </StoreProvider>
+--- a/src/components/DemoNav.jsx
++++ b/src/components/DemoNav.jsx
+@@ -5,8 +5,9 @@
+ import { Compass, LogOut, ShieldCheck, X } from 'lucide-react'
+ import { ROLES } from './ui'
+ import { useStore } from '../store'
++import { DEMO_ENABLED } from '../lib/flags'
+ 
+-export const DEMO_MODE = true
++export const DEMO_MODE = DEMO_ENABLED // false in production builds
+ 
+ const ACCOUNTS = {
+   investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', organization: 'u-org', admin: 'u-admin',
+@@ -53,7 +54,7 @@
+   useEffect(() => {
+     const params = new URLSearchParams(loc.search)
+     const as = params.get('as')
+-    if (!as || handled.current === loc.key) return
++    if (!DEMO_MODE || !as || handled.current === loc.key) return
+     handled.current = loc.key
+     if (ACCOUNTS[as]) setCurrent(ACCOUNTS[as])
+     params.delete('as')
+--- a/src/pages/Auth.jsx
++++ b/src/pages/Auth.jsx
+@@ -7,23 +7,10 @@
+ import { Avatar, ChipSelect, Logo, Mountains, ROLES, RoleBadge, StatusBadge, ThemeToggle, Toggle, fmtDate, fmtTime } from '../components/ui'
+ import { KEYWORDS, SECTORS, STAGES } from '../data/demo'
+ import { useStore } from '../store'
++import { DEMO_ENABLED } from '../lib/flags'
++import { checkPassword } from '../lib/validation'
+ 
+ 
+-function checkPassword(pw = '') {
+-  const rules = [
+-    ['At least 8 characters', pw.length >= 8],
+-    ['An uppercase letter', /[A-Z]/.test(pw)],
+-    ['A lowercase letter', /[a-z]/.test(pw)],
+-    ['A number', /\d/.test(pw)],
+-    ['A symbol (! @ # $ …)', /[^A-Za-z0-9]/.test(pw)],
+-  ]
+-  const passed = rules.filter(([, ok]) => ok).length
+-  const common = /^(password|12345678|123456789|qwerty|abc123|letmein|iloveyou)/i.test(pw) || /^(.)\1+$/.test(pw)
+-  const score = common ? Math.min(passed, 2) : passed + (pw.length >= 12 ? 1 : 0)
+-  const level = !pw ? 0 : score <= 2 ? 1 : score <= 4 ? 2 : score === 5 ? 3 : 4
+-  return { rules, level, label: ['', 'Weak', 'Fair', 'Good', 'Strong'][level], ok: passed === rules.length && !common }
+-}
+-
+ function generatePassword(len = 14) {
+   const sets = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '!@#$%&*?']
+   const all = sets.join('')
+@@ -395,9 +382,11 @@
+                 </div>
+               ))}
+             </div>
+-            <button type="button" className="btn btn-soft btn-sm mt-4" onClick={() => { setFiles({}); setDocs(Object.fromEntries(cfg.docs.map((d) => [d.key, d.label.split(' ')[0] + '_sample.pdf']))) }}>
+-              <Sparkles size={14} /> Demo: attach sample files
+-            </button>
++            {DEMO_ENABLED && (
++              <button type="button" className="btn btn-soft btn-sm mt-4" onClick={() => { setFiles({}); setDocs(Object.fromEntries(cfg.docs.map((d) => [d.key, d.label.split(' ')[0] + '_sample.pdf']))) }}>
++                <Sparkles size={14} /> Demo: attach sample files
++              </button>
++            )}
+             <div className="card mt-6" style={{ padding: 16, background: 'var(--blue-50)', borderColor: 'var(--primary-100)', display: 'flex', gap: 12 }}>
+               <Lock size={18} color="var(--blue)" style={{ flexShrink: 0, marginTop: 2 }} />
+               <div className="small">Your files are used for verification only. Use clear photos or PDF scans.</div>
+@@ -562,7 +551,7 @@
+         </h1>
+         <p className="muted mt-3" style={{ fontSize: 16 }}>
+           {user.status === 'approved' ? 'Welcome to Aakar. Everything is unlocked for you now.'
+-            : user.status === 'rejected' ? <>Reason: <b style={{ color: 'var(--ink)' }}>{user.rejectReason || 'Documents could not be verified.'}</b> You can register again with updated documents.</>
++            : user.status === 'rejected' ? <>Reason: <b style={{ color: 'var(--ink)' }}>{user.rejectReason || 'Documents could not be verified.'}</b> To send a new application, register again with the same email and password.</>
+               : <>Hi {user.name.split(' ')[0]}, an Aakar admin is checking your details and documents. We’ll email <b style={{ color: 'var(--ink)' }}>{user.email}</b> when you’re approved.</>}
+         </p>
+ 
+@@ -582,7 +571,7 @@
+         <div className="row wrap mt-6">
+           {user.status === 'approved' && <button className="btn btn-primary btn-lg" onClick={() => nav('/app')}>Enter Aakar <ArrowRight size={18} /></button>}
+           {user.status === 'rejected' && <Link to="/register" className="btn btn-primary btn-lg">Register again</Link>}
+-          {user.status === 'pending' && (
++          {DEMO_ENABLED && user.status === 'pending' && (
+             <div className="card" style={{ padding: 16, background: 'var(--gold-50)', borderColor: 'transparent', display: 'flex', gap: 12, alignItems: 'center', width: '100%' }}>
+               <Sparkles size={20} color="var(--amber)" />
+               <div className="grow small"><b>Hackathon demo:</b> log in as admin to approve this account, then come back.</div>
+--- a/src/pages/Admin.jsx
++++ b/src/pages/Admin.jsx
+@@ -3,6 +3,7 @@
+ import { Check, CheckCircle2, Clock, Eye, FileText, LogOut, RotateCcw, Search, ShieldCheck, Users, X, XCircle } from 'lucide-react'
+ import { Avatar, Empty, Logo, Modal, ROLES, RoleBadge, StatusBadge, ThemeToggle, ago, fmtDate, fmtTime } from '../components/ui'
+ import { useStore } from '../store'
++import { DEMO_ENABLED } from '../lib/flags'
+ 
+ const CHECKS = {
+   investor: ['Name on ID matches account', 'ID document is valid and not expired', 'Proof of funds / accreditation looks genuine', 'No duplicate or flagged accounts'],
+@@ -77,14 +78,14 @@
+               ? u.files.map((f) => (
+                   <div key={f.path} className="doc-preview">
+                     <div className="doc-thumb" />
+-                    <div className="grow"><div className="small bold">{f.label}</div><div className="xs muted">Uploaded with application · encrypted</div></div>
++                    <div className="grow"><div className="small bold">{f.label}</div><div className="xs muted">Uploaded with application · private</div></div>
+                     <button className="btn btn-ghost btn-sm" onClick={() => openFile(f)}><Eye size={14} /> View</button>
+                   </div>
+                 ))
+               : (u.docs || []).map((d) => (
+                   <div key={d} className="doc-preview">
+                     <div className="doc-thumb" />
+-                    <div className="grow"><div className="small bold">{d}</div><div className="xs muted">Uploaded with application · encrypted</div></div>
++                    <div className="grow"><div className="small bold">{d}</div><div className="xs muted">Uploaded with application · private</div></div>
+                     <button className="btn btn-ghost btn-sm" onClick={() => setPreview(d)}><Eye size={14} /> View</button>
+                   </div>
+                 ))}
+@@ -154,7 +155,8 @@
+   if (!user) return <Navigate to="/login" replace />
+   if (user.role !== 'admin') return <Navigate to="/app" replace />
+ 
+-  const apps = state.users.filter((u) => u.role !== 'admin')
++  // A real admin sees real applications only (no sample people).
++  const apps = state.users.filter((u) => u.role !== 'admin' && (!user.remote || u.remote))
+   const counts = { pending: apps.filter((u) => u.status === 'pending').length, approved: apps.filter((u) => u.status === 'approved').length, rejected: apps.filter((u) => u.status === 'rejected').length }
+   const list = apps
+     .filter((u) => tab === 'all' || u.status === tab)
+@@ -169,7 +171,7 @@
+         <div className="row"><Logo to="/admin" /><span className="badge" style={{ background: 'rgba(255,255,255,.1)', color: '#fff' }}>Admin console</span></div>
+         <div className="row">
+           <ThemeToggle />
+-          <button className="btn btn-sm" onClick={() => { resetDemo(); nav('/login') }}><RotateCcw size={14} /> Reset demo</button>
++          {DEMO_ENABLED && <button className="btn btn-sm" onClick={() => { resetDemo(); nav('/login') }}><RotateCcw size={14} /> Reset demo</button>}
+           <button className="btn btn-sm" onClick={() => { logout(); nav('/login') }}><LogOut size={14} /> Log out</button>
+         </div>
+       </div>
+--- a/src/pages/Student.jsx
++++ b/src/pages/Student.jsx
+@@ -2,7 +2,7 @@
+ import { useState } from 'react'
+ import { Link, useNavigate } from 'react-router-dom'
+ import { ArrowRight, Bell, CalendarDays, Check, Clock, ExternalLink, MapPin, MessageCircle, Sparkles, Star, Users, Video } from 'lucide-react'
+-import { Avatar, Empty, Modal, fmtTime } from '../components/ui'
++import { Avatar, Empty, Modal, fmtNPT, sessionWhen } from '../components/ui'
+ import { useStore, validateMeetingLink } from '../store'
+ import { recommendMentors, recommendSessions } from '../lib/recommend'
+ 
+@@ -71,7 +71,6 @@
+ 
+ export function SessionCard({ se, host, studentId, onToggle, matched, footer }) {
+   const { user, claimPayment } = useStore()
+-  const d = new Date(se.date)
+   const reg = studentId && se.registered.includes(studentId)
+   const going = se.taken ?? se.registered.length
+   const left = se.seats - going
+@@ -88,7 +87,7 @@
+ 
+   return (
+     <div className="card session-card">
+-      <div className="date-tile"><div className="m">{d.toLocaleString('en-US', { month: 'short' })}</div><div className="d">{d.getDate()}</div><div className="xs muted">{d.toLocaleString('en-US', { weekday: 'short' })}</div></div>
++      <div className="date-tile"><div className="m">{fmtNPT(se.date, { month: 'short' })}</div><div className="d">{fmtNPT(se.date, { day: 'numeric' })}</div><div className="xs muted">{fmtNPT(se.date, { weekday: 'short' })}</div></div>
+       <div className="grow">
+         <div className="row wrap" style={{ gap: 6 }}>
+           <span className="chip chip-match">{se.keyword}</span>
+@@ -98,7 +97,7 @@
+         <div className="bold mt-2" style={{ fontSize: 16 }}>{se.title}</div>
+         <p className="small muted mt-1">{se.desc}</p>
+         <div className="row wrap mt-3 xs muted" style={{ gap: 14 }}>
+-          <span className="row" style={{ gap: 4 }}><Clock size={13} /> {fmtTime(se.date)} NPT · {se.duration} min</span>
++          <span className="row" style={{ gap: 4 }}><Clock size={13} /> {sessionWhen(se.date)} · {se.duration} min</span>
+           <span className="row" style={{ gap: 4 }}><Video size={13} /> {se.mode}</span>
+           <span className="row" style={{ gap: 4 }}><Users size={13} /> {going} going · {left} seats left</span>
+         </div>
+@@ -295,7 +294,7 @@
+               <p className="small" style={{ color: 'var(--ink-2)' }}>{m.bio}</p>
+               <div className="row wrap" style={{ gap: 6 }}>{m.fields.map((f) => <span key={f} className={`chip ${common.includes(f) ? 'chip-match' : ''}`}>{common.includes(f) && <Check size={12} />} {f}</span>)}</div>
+               {reasons.length > 0 && <div className="xs muted row" style={{ gap: 4 }}><Sparkles size={11} /> Why this mentor: {reasons.join(', ')}</div>}
+-              <div className="row xs muted" style={{ gap: 14 }}><span className="row" style={{ gap: 4 }}><Star size={13} color="var(--gold)" fill="var(--gold)" /> {m.rating}</span><span>{m.mentees} mentees</span><span>{m.hours} hrs/month</span></div>
++              <div className="row xs muted" style={{ gap: 14 }}><span className="row" style={{ gap: 4 }}>{m.rating != null ? <><Star size={13} color="var(--gold)" fill="var(--gold)" /> {m.rating}</> : 'New mentor'}</span><span>{m.mentees} mentees</span><span>{m.hours} hrs/month</span></div>
+               {req?.status === 'accepted' ? <button className="btn btn-success btn-block" onClick={() => {
+                 const id = conv ? conv.id : startChat({ name: m.name, initials: m.initials, color: m.color, subtitle: `${m.title}, ${m.company}`, kind: 'mentor', refId: m.id, userId: m.userId })
+                 nav('/app/messages?c=' + id)
+--- a/src/pages/Professional.jsx
++++ b/src/pages/Professional.jsx
+@@ -1,7 +1,7 @@
+ import { useState } from 'react'
+ import { Link, useNavigate } from 'react-router-dom'
+ import { Bell, CalendarDays, CalendarPlus, Check, GraduationCap, Heart, MessageCircle, Plus, Sparkles, Star, Users, Wrench, X } from 'lucide-react'
+-import { Avatar, Empty, Modal, ago } from '../components/ui'
++import { Avatar, Empty, Modal, ago, fmtNPT, sessionWhen } from '../components/ui'
+ import { KEYWORDS } from '../data/demo'
+ import { useStore, validateMeetingLink } from '../store'
+ import { recommendStudents } from '../lib/recommend'
+@@ -97,7 +97,7 @@
+           <div className="card card-pad">
+             <div className="row-between"><div className="xs faint bold">MY UPCOMING SESSIONS</div><Link to="/app/sessions" className="xs link">Manage</Link></div>
+             {mySessions.length === 0 && <p className="small muted mt-3">No sessions scheduled.</p>}
+-            {mySessions.map((s) => <div key={s.id} className="list-row"><CalendarDays size={18} color="var(--primary)" /><div className="grow"><div className="small bold">{s.title}</div><div className="xs muted">{new Date(s.date).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · {s.registered.length} going</div></div></div>)}
++            {mySessions.map((s) => <div key={s.id} className="list-row"><CalendarDays size={18} color="var(--primary)" /><div className="grow"><div className="small bold">{s.title}</div><div className="xs muted">{fmtNPT(s.date, { weekday: 'short', month: 'short', day: 'numeric' })}, {sessionWhen(s.date)} · {s.registered.length} going</div></div></div>)}
+           </div>
+           <div className="card card-pad" style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-100)' }}>
+             <Wrench size={20} color="var(--blue)" />
+--- a/src/components/ui.jsx
++++ b/src/components/ui.jsx
+@@ -211,6 +211,19 @@
+ }
+ export const fmtDate = (iso, opts = { month: 'short', day: 'numeric' }) => new Date(iso).toLocaleDateString('en-US', opts)
+ export const fmtTime = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
++
++const NPT = 'Asia/Kathmandu'
++// Date or time parts in Nepal time, whatever time zone this browser is in.
++export const fmtNPT = (iso, opts) => new Date(iso).toLocaleString('en-US', { timeZone: NPT, ...opts })
++// "8:30 PM NPT" for people in Nepal; "8:30 PM NPT · 1:15 AM GMT-5 your time" for everyone else.
++export const sessionWhen = (iso) => {
++  const d = new Date(iso)
++  const hm = { hour: 'numeric', minute: '2-digit' }
++  const npt = d.toLocaleTimeString('en-US', { ...hm, timeZone: NPT })
++  const mine = d.toLocaleTimeString('en-US', hm)
++  if (npt === mine) return `${npt} NPT`
++  return `${npt} NPT · ${d.toLocaleTimeString('en-US', { ...hm, timeZoneName: 'short' })} your time`
++}
+ export const ago = (iso) => {
+   const s = (Date.now() - new Date(iso)) / 1000
+   if (s < 0) return 'in ' + Math.ceil(-s / 86400) + 'd'
+--- a/src/data/demo.js
++++ b/src/data/demo.js
+@@ -1,4 +1,5 @@
+ // All data here is fictional demo data for the hackathon prototype.
++import { DEMO_ENABLED } from '../lib/flags'
+ 
+ export const KEYWORDS = [
+   'Computer Science', 'AI / ML', 'Data Science', 'Software Engineering', 'Medicine', 'Nursing',
+@@ -183,8 +184,12 @@
+   { id: 'o4', name: 'Bagmati Rural Municipality', initials: 'BM', color: '#0891b2', type: 'Local government', district: 'Lalitpur' },
+ ]
+ 
++// A moment `offset` days from now at h:m Nepal time (UTC+05:45), whatever time zone the browser is in.
+ const day = (offset, h = 19, m = 0) => {
+-  const d = new Date(); d.setDate(d.getDate() + offset); d.setHours(h, m, 0, 0); return d.toISOString()
++  const base = new Date(Date.now() + offset * 864e5)
++  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(base) // YYYY-MM-DD
++  const pad = (n) => String(n).padStart(2, '0')
++  return new Date(`${ymd}T${pad(h)}:${pad(m)}:00+05:45`).toISOString()
+ }
+ 
+ export const sessions = [
+@@ -221,7 +226,7 @@
+ ]
+ 
+ // Demo accounts (seed data). Password for all demo accounts: demo123
+-export const seedUsers = [
++export const seedUsers = !DEMO_ENABLED ? [] : [
+   { id: 'u-admin', email: 'admin@aakar.demo', password: 'demo123', role: 'admin', status: 'approved', name: 'Aakar Admin', initials: 'AA', color: '#0d1b45' },
+   { id: 'u-inv', email: 'investor@aakar.demo', password: 'demo123', role: 'investor', status: 'approved', refId: 'i1', name: 'Rajesh Karki', initials: 'RK', color: '#2152d9', submittedAt: day(-20), docs: ['Passport.pdf', 'Accreditation_letter.pdf'] },
+   { id: 'u-stu', email: 'student@aakar.demo', password: 'demo123', role: 'student', status: 'approved', refId: 'st1', name: 'Aarati Pokharel', initials: 'AP', color: '#e11d48', submittedAt: day(-15), docs: ['Student_ID.jpg', 'Enrollment_letter.pdf'] },

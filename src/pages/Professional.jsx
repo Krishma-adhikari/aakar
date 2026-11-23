@@ -72,7 +72,7 @@ export function ProHome() {
           <div className="card card-pad" style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-100)' }}>
             <Wrench size={20} color="var(--blue)" />
             <div className="bold mt-2">{openChallenges} tech challenges need help</div>
-            <p className="small muted mt-1">Schools and NGOs in Nepal are waiting for advice.</p>
+            <p className="small muted mt-1">Nepali startups are waiting for advice.</p>
             <Link to="/app/helpdesk" className="btn btn-blue btn-sm mt-3">Open Help Desk</Link>
           </div>
         </div>

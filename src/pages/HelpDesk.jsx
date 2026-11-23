@@ -50,7 +50,7 @@ export default function HelpDesk() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Tech Help Desk</h1><p>NGOs, schools and startups post technical problems. The diaspora tech community suggests solutions.</p></div>
+        <div><h1>Tech Help Desk</h1><p>Startups post technical problems. The diaspora tech community suggests solutions.</p></div>
         {canPost && <button className="btn btn-primary" onClick={() => setPosting(true)}><Plus size={17} /> Post a challenge</button>}
       </div>
       <div className="filters">
@@ -110,7 +110,7 @@ export default function HelpDesk() {
       {posting && (
         <Modal title="Post a technical challenge" sub="Describe the problem clearly. Experts will reply with suggestions in chat." onClose={() => setPosting(false)} width={620}>
           <div className="grid-2">
-            <div className="field span-2"><label>What’s the problem?</label><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Our school website keeps going down" /></div>
+            <div className="field span-2"><label>What’s the problem?</label><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Our website is slow for users abroad" /></div>
             <div className="field"><label>Category</label><select className="select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></div>
             <div className="field"><label>Urgency</label><select className="select" value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value })}><option>High</option><option>Medium</option><option>Low</option></select></div>
             <div className="field span-2"><label>Details</label><textarea className="textarea" rows={5} value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} placeholder="What have you tried? What equipment, budget and internet do you have?" /></div>

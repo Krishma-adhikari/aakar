@@ -20,7 +20,6 @@ const seed = (list) => (DEMO_ENABLED ? list : [])
 const initial = () => ({
   users: seed(demo.seedUsers),
   currentUserId: null,
-
   startups: seed(demo.startups),
   investors: seed(demo.investors),
   mentors: seed(demo.mentors),
@@ -38,6 +37,9 @@ const initial = () => ({
 })
 
 
+// Demo-only shortcut: ?as=student (etc.) signs in as that sample account. Never active in production.
+const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', admin: 'u-admin' }
+
 // Sample session dates are made when the demo first loads. Move them forward by the whole days
 // that have passed since, so the demo never ends up with only past sessions.
 function shiftDemoDates(st) {
@@ -51,9 +53,6 @@ function shiftDemoDates(st) {
     sessions: st.sessions.map((se) => (se.remote ? se : { ...se, date: shift(se.date) })),
   }
 }
-
-// TEMPORARY demo shortcut: ?as=student (etc.) signs in as that demo account on load.
-const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', admin: 'u-admin' }
 
 function load() {
   let st = initial()
@@ -342,6 +341,8 @@ function buildEntity(user) {
       const ask = Number(String(r.ask || user.profile?.['Funding ask'] || '50000').replace(/[^\d]/g, '')) || 50000
       return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: [{ name: user.name, role: 'Founder', bg: '' }], traction: [{ k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }], tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
     }
+
+
 
     default:
       return [null, null]
@@ -1318,7 +1319,7 @@ const safety = setTimeout(done, 3000)
         ; (async () => {
           try {
             const { data: row, error } = await supabase.from('challenges').insert({
-              poster_id: me.id, poster_type: 'startup',
+              poster_id: me.id, poster_type: me.role === 'startup' ? 'startup' : 'organization',
               title: data.title, category: data.category, urgency: data.urgency, tags: data.tags || [], description: data.desc || '',
               prize_amount: prize,
             }).select().single()
@@ -1490,9 +1491,7 @@ export function useNotifications() {
       })
     }
 
-
     if (user.role === 'startup') {
-
       state.challenges.filter((c) => c.posterId === entity.id).forEach((c) => c.responses.forEach((r, i) => {
         out.push({ id: `n-${c.id}-${i}`, icon: 'bulb', text: `${r.name} suggested a solution`, sub: c.title, to: '/app/helpdesk', at: r.at })
       }))

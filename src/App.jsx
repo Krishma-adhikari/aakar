@@ -86,7 +86,6 @@ export default function App() {
       {/* BASE_URL follows vite.config: '/aakar/' locally, '/' on Vercel */}
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <ScrollTop />
- main
         {DEMO_ENABLED && <DemoNav />}
         <Suspense fallback={<PageLoader />}>
           <Gate><Routes>
@@ -108,7 +107,9 @@ export default function App() {
                     investor={<Discover />}
                     startup={<StartupHome />}
                     student={<StudentHome />}
-                    professional={<ProHome />}                  />
+                    professional={<ProHome />}
+                    organization={<Navigate to="/app/helpdesk" replace />}
+                  />
                 }
               />
               <Route path="startups" element={<RoleRoute investor={<Discover />} />} />
@@ -130,7 +131,9 @@ export default function App() {
                     investor={<InvestorProfile />}
                     startup={<StartupProfile />}
                     student={<Profile />}
-                    professional={<Profile />}                  />
+                    professional={<Profile />}
+                    organization={<Profile />}
+                  />
                 }
               />
             </Route>
@@ -138,31 +141,6 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes></Gate>
         </Suspense>
-
-        <DemoNav />
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/register" element={<RoleSelect />} />
-          <Route path="/register/:role" element={<Register />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/pending" element={<Pending />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/app" element={<AppShell />}>
-            <Route index element={<ByRole investor={<Discover />} startup={<StartupHome />} student={<StudentHome />} professional={<ProHome />} />} />
-            <Route path="startups" element={<ByRole investor={<Discover />} />} />
-            <Route path="startups/:id" element={<StartupDetail />} />
-            <Route path="saved" element={<ByRole investor={<Saved />} />} />
-            <Route path="investors" element={<ByRole startup={<InvestorsDirectory />} />} />
-            <Route path="sessions" element={<ByRole student={<StudentSessions />} professional={<ProSessions />} />} />
-            <Route path="mentors" element={<ByRole student={<Mentors />} />} />
-            <Route path="students" element={<ByRole professional={<ProStudents />} />} />
-            <Route path="helpdesk" element={<HelpDesk />} />
-            <Route path="messages" element={<Messages />} />
-            <Route path="profile" element={<ByRole investor={<InvestorProfile />} startup={<StartupProfile />} student={<Profile />} professional={<Profile />} />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-
       </BrowserRouter>
     </StoreProvider>
   )

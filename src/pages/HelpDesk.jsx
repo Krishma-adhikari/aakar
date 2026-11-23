@@ -28,10 +28,7 @@ export default function HelpDesk() {
   list = list.filter((c) => (!q || (c.title + c.desc).toLowerCase().includes(q.toLowerCase())) && (!cats.length || cats.includes(c.category)))
 
   const submitPost = () => {
-
-    postChallenge({ posterType: user.role === 'startup' ? 'startup' : 'organization', posterId: entity.id, title: form.title, category: form.category, urgency: form.urgency, desc: form.desc, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean), prize: form.prize })
-
-    postChallenge({ posterType: 'startup', posterId: entity.id, title: form.title, category: form.category, urgency: form.urgency, desc: form.desc, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) })
+    postChallenge({ posterType: 'startup', posterId: entity.id, title: form.title, category: form.category, urgency: form.urgency, desc: form.desc, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean), prize: form.prize })
 
     toast('Challenge posted. Professionals in that field will see it.')
     setPosting(false); setTab('mine')

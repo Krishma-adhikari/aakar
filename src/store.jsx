@@ -25,22 +25,11 @@ const initial = () => ({
   investors: seed(demo.investors),
   mentors: seed(demo.mentors),
   students: seed(demo.students),
-  organizations: seed(demo.organizations),
   sessions: seed(demo.sessions),
   requests: seed(demo.mentorshipRequests),
   challenges: seed(demo.challenges),
   conversations: seed(demo.seedConversations),
   saved: DEMO_ENABLED ? { 'u-inv': ['s4'] } : {},
-
-  startups: demo.startups,
-  investors: demo.investors,
-  mentors: demo.mentors,
-  students: demo.students,
-  sessions: demo.sessions,
-  requests: demo.mentorshipRequests,
-  challenges: demo.challenges,
-  conversations: demo.seedConversations,
-  saved: { 'u-inv': ['s4'] },
 
   readNotifs: {},
   readMessages: {}, // { [userId]: [ids of demo messages already read] }
@@ -48,9 +37,6 @@ const initial = () => ({
   seededAt: new Date().toISOString(), // when the sample dates were generated (demo mode only)
 })
 
-
-// Demo-only shortcut: ?as=student (etc.) signs in as that sample account. Never active in production.
-const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', organization: 'u-org', admin: 'u-admin' }
 
 // Sample session dates are made when the demo first loads. Move them forward by the whole days
 // that have passed since, so the demo never ends up with only past sessions.
@@ -155,7 +141,7 @@ function withRemote(s, rows) {
   return next
 }
 
-const ENTITY_LISTS = ['startups', 'investors', 'mentors', 'students', 'organizations']
+const ENTITY_LISTS = ['startups', 'investors', 'mentors', 'students']
 
 // Drop listings of real members who are no longer approved (or that I am no longer allowed to see).
 function pruneRemote(s, approvedIds) {
@@ -173,8 +159,8 @@ function registerLocal(setState, { role, name, email, password, profile, raw, do
 
 /* ---------- Real chat helpers ---------- */
 
-const KIND = { investor: 'investor', startup: 'startup', student: 'student', professional: 'mentor', organization: 'organization' }
-const ROLE_LABEL = { investor: 'Investor', startup: 'Startup founder', student: 'Student', professional: 'Professional', organization: 'Organization' }
+const KIND = { investor: 'investor', startup: 'startup', student: 'student', professional: 'mentor' }
+const ROLE_LABEL = { investor: 'Investor', startup: 'Startup founder', student: 'Student', professional: 'Professional' }
 
 // Describe a real person (a profiles row) the way the Messages page expects a chat peer.
 const peerFromRow = (row) => {
@@ -193,7 +179,7 @@ const peerFromRow = (row) => {
 
 // If the person you are messaging is a real account, return their Supabase user id.
 const peerUserId = (s, peer) => peer.userId
-  || [...s.startups, ...s.investors, ...s.mentors, ...s.students, ...s.organizations].find((e) => e.id === peer.refId)?.userId
+  || [...s.startups, ...s.investors, ...s.mentors, ...s.students].find((e) => e.id === peer.refId)?.userId
 
 // A real member's platform record id (matches buildEntity), so existing pages can find them.
 const eid = (userId) => 'r-' + userId.slice(0, 8)
@@ -304,7 +290,7 @@ async function sendRemote({ setState, toast, convId, remoteId, remoteUserId, meI
 // If they have no chat with me (for example because they deleted it) a new one is created
 // that holds only this message. `intro` is an optional system line shown before it.
 function demoDeliver(s, me, other, text, srcId, intro) {
-  const lists = { investor: s.investors, student: s.students, startup: s.startups, professional: s.mentors, organization: s.organizations }
+  const lists = { investor: s.investors, student: s.students, startup: s.startups, professional: s.mentors }
   const mine = lists[me.role]?.find((x) => x.id === me.refId)
   const subtitle = me.role === 'student' ? `Mentee · ${mine?.institution || ''}`
     : me.role === 'professional' ? `${mine?.title || ''}, ${mine?.company || ''}`
@@ -356,13 +342,6 @@ function buildEntity(user) {
       const ask = Number(String(r.ask || user.profile?.['Funding ask'] || '50000').replace(/[^\d]/g, '')) || 50000
       return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: [{ name: user.name, role: 'Founder', bg: '' }], traction: [{ k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }], tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
     }
-
-    case 'organization': {
-      // The listing carries the organization's name, not the contact person's.
-      const orgName = (r.orgName || user.profile?.['Organization name'] || '').trim() || user.name
-      return ['organizations', { ...base, name: orgName, initials: initialsOf(orgName), color: pickColor(orgName), contact: user.name, type: r.orgType || user.profile?.['Organization type'] || 'NGO', district: r.district || user.profile?.District || '' }]
-    }
-
 
     default:
       return [null, null]
@@ -1339,7 +1318,7 @@ const safety = setTimeout(done, 3000)
         ; (async () => {
           try {
             const { data: row, error } = await supabase.from('challenges').insert({
-              poster_id: me.id, poster_type: me.role === 'startup' ? 'startup' : 'organization',
+              poster_id: me.id, poster_type: 'startup',
               title: data.title, category: data.category, urgency: data.urgency, tags: data.tags || [], description: data.desc || '',
               prize_amount: prize,
             }).select().single()
@@ -1511,8 +1490,6 @@ export function useNotifications() {
       })
     }
 
-
-    if (user.role === 'organization' || user.role === 'startup') {
 
     if (user.role === 'startup') {
 

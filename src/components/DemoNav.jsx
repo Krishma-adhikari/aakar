@@ -48,8 +48,6 @@ export default function DemoNav() {
     }
   }, [open])
 
-  // Shareable links: add ?as=student (or investor, startup, professional, organization, admin) to any URL.
-
   // Shareable links: add ?as=student (or investor, startup, professional, admin) to any URL.
 
   // The param is applied once, then removed so it can't override later role switches.

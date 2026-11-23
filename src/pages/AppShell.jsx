@@ -41,11 +41,6 @@ const NAV = {
     ['/app/messages', 'Messages', MessageCircle],
     ['/app/profile', 'My profile', User],
   ],
-  organization: [
-    ['/app/helpdesk', 'Tech Help Desk', Wrench],
-    ['/app/messages', 'Messages', MessageCircle],
-    ['/app/profile', 'Organization', User],
-  ],
 
   investor: [['/app/startups', 'Discover startups', Compass], ['/app/saved', 'Saved', Bookmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My profile', User]],
   startup: [['/app', 'Dashboard', Home], ['/app/investors', 'Investors', Landmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My listing', Rocket]],

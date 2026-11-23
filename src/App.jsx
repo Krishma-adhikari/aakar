@@ -108,9 +108,7 @@ export default function App() {
                     investor={<Discover />}
                     startup={<StartupHome />}
                     student={<StudentHome />}
-                    professional={<ProHome />}
-                    organization={<Navigate to="/app/helpdesk" replace />}
-                  />
+                    professional={<ProHome />}                  />
                 }
               />
               <Route path="startups" element={<RoleRoute investor={<Discover />} />} />
@@ -132,9 +130,7 @@ export default function App() {
                     investor={<InvestorProfile />}
                     startup={<StartupProfile />}
                     student={<Profile />}
-                    professional={<Profile />}
-                    organization={<Profile />}
-                  />
+                    professional={<Profile />}                  />
                 }
               />
             </Route>

@@ -177,13 +177,6 @@ export const students = [
   { id: 'st5', name: 'Prerana Dahal', initials: 'PD', color: '#6d4ae6', institution: 'Tribhuvan University', level: 'Master (1st year)', city: 'Kirtipur', interests: ['Public Health', 'Scholarships', 'Study in UK'], goal: 'Chevening scholarship for MPH.' },
 ]
 
-export const organizations = [
-  { id: 'o1', name: 'Shree Janajyoti Secondary School', initials: 'JS', color: '#2152d9', type: 'School', district: 'Sindhupalchok' },
-  { id: 'o2', name: 'Women for Green Hills', initials: 'WG', color: '#0f9f6e', type: 'NGO', district: 'Kaski' },
-  { id: 'o3', name: 'Sahara Youth Club', initials: 'SY', color: '#e8961e', type: 'Community org', district: 'Dang' },
-  { id: 'o4', name: 'Bagmati Rural Municipality', initials: 'BM', color: '#0891b2', type: 'Local government', district: 'Lalitpur' },
-]
-
 // A moment `offset` days from now at h:m Nepal time (UTC+05:45), whatever time zone the browser is in.
 
 const day = (offset, h = 19, m = 0) => {

@@ -112,20 +112,6 @@ const FORMS = {
       { key: 'emp', label: 'Proof of employment', hint: 'Employment letter, work ID or payslip (amounts hidden)', required: true },
     ],
   },
-  organization: {
-    fields: [
-      { key: 'orgName', label: 'Organization name', required: true, span: 2 },
-      { key: 'orgType', label: 'Type', type: 'select', options: ['NGO', 'School', 'College', 'Community org', 'Local government', 'Cooperative'], required: true },
-      { key: 'regNo', label: 'Registration number', placeholder: 'SWC / DEO registration no.', required: true },
-      { key: 'district', label: 'District', required: true },
-      { key: 'contactRole', label: 'Your role', placeholder: 'e.g. Principal, Program Manager', required: true },
-      { key: 'focus', label: 'What does your organization do?', type: 'textarea', span: 2 },
-    ],
-    docs: [
-      { key: 'reg', label: 'Registration certificate', hint: 'Social Welfare Council, DEO or municipality certificate', required: true },
-      { key: 'auth', label: 'Authorization letter', hint: 'Letter on letterhead allowing you to represent the organization', required: true },
-    ],
-  },
 }
 
 function AuthLayout({ children, side }) {
@@ -329,6 +315,10 @@ export function Register() {
         {step === 0 && (
           <>
             <h1 style={{ fontSize: 32 }}>Create your {r.label.toLowerCase()} account</h1>
+
+
+            <p className="muted mt-2">This is the person who will manage the account{role === 'startup' ? ' for your startup' : ''}.</p>
+
             <div className="grid-2 mt-6">
               <div className="field span-2"><label>Full name <span className="req">*</span></label><input className={`input ${errors.name ? 'invalid' : ''}`} value={acc.name} onChange={setA('name')} placeholder="As on your ID" />{errors.name && <span className="err">{errors.name}</span>}</div>
               <div className="field"><label>Email <span className="req">*</span></label><input className={`input ${errors.email ? 'invalid' : ''}`} value={acc.email} onChange={setA('email')} placeholder="you@example.com" />{errors.email && <span className="err">{errors.email}</span>}</div>
@@ -373,7 +363,7 @@ export function Register() {
         {step === 2 && (
           <>
             <h1 style={{ fontSize: 32 }}>Verification documents</h1>
-            <p className="muted mt-2">Only Aakar admins can see these. They are used to verify your {role === 'startup' ? 'company' : role === 'organization' ? 'organization' : 'identity'} and are never shown publicly.</p>
+            <p className="muted mt-2">Only Aakar admins can see these. They are used to verify your {role === 'startup' ? 'company' : 'identity'} and are never shown publicly.</p>
             <div className="stack mt-6">
               {cfg.docs.map((d) => (
                 <div key={d.key}>
@@ -425,7 +415,7 @@ export function Register() {
 /* ---------- Login with verification check ---------- */
 const DEMO = [
   ['investor@aakar.demo', 'investor', 'Investor'], ['startup@aakar.demo', 'startup', 'Startup founder'], ['student@aakar.demo', 'student', 'Student'],
-  ['mentor@aakar.demo', 'professional', 'Professional'], ['org@aakar.demo', 'organization', 'Organization'], ['admin@aakar.demo', 'admin', 'Admin'],
+  ['mentor@aakar.demo', 'professional', 'Professional'], ['admin@aakar.demo', 'admin', 'Admin'],
   ['pending@aakar.demo', 'investor', 'Pending account'], ['fakeinvestor@demo.com', 'investor', 'Rejected account'],
 ]
 
@@ -479,7 +469,7 @@ export function Login() {
         {!checking ? (
           <>
             <h1 style={{ fontSize: 34 }}>Log in to Aakar</h1>
-            <p className="muted mt-2">Investors, founders, students, professionals and organizations all sign in here.</p>
+            <p className="muted mt-2">Investors, founders, students, and professionals all sign in here.</p>
             <form onSubmit={run} className="stack mt-6" style={{ gap: 16 }}>
               <div className="field"><label>Email</label><div className="input-icon"><Mail size={17} /><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="username" /></div></div>
               <div className="field"><label>Password</label><div className="input-icon"><Lock size={17} /><input type="password" className="input" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" autoComplete="current-password" /></div></div>

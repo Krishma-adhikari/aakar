@@ -10,7 +10,6 @@ const CHECKS = {
   startup: ['OCR registration number verified', 'PAN / VAT certificate matches company name', 'Founder citizenship matches account holder', 'Pitch contains no misleading claims'],
   student: ['Student ID matches name', 'Institution is recognised', 'Currently enrolled'],
   professional: ['Name on ID matches account', 'Employment verified (letter or LinkedIn)', 'Expertise matches experience'],
-  organization: ['Registration certificate is valid', 'Authorization letter on official letterhead', 'Contact person verified by phone'],
 }
 const REASONS = ['Could not verify identity documents.', 'Documents are blurry or incomplete.', 'Registration number does not match records.', 'Duplicate account.', 'Other']
 

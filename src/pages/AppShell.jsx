@@ -10,6 +10,7 @@ import { useNotifications, useStore } from '../store'
 
 // Sidebar menu per role. Each item is [path, label, Icon].
 const NAV = {
+
   investor: [
     ['/app/startups', 'Discover startups', Compass],
     ['/app/saved', 'Saved', Bookmark],
@@ -45,6 +46,12 @@ const NAV = {
     ['/app/messages', 'Messages', MessageCircle],
     ['/app/profile', 'Organization', User],
   ],
+
+  investor: [['/app/startups', 'Discover startups', Compass], ['/app/saved', 'Saved', Bookmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My profile', User]],
+  startup: [['/app', 'Dashboard', Home], ['/app/investors', 'Investors', Landmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My listing', Rocket]],
+  student: [['/app', 'Home', Home], ['/app/sessions', 'Sessions', CalendarDays], ['/app/mentors', 'Find mentors', Users], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'My profile', User]],
+  professional: [['/app', 'Home', Home], ['/app/sessions', 'My sessions', CalendarDays], ['/app/students', 'Students', GraduationCap], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'My profile', User]],
+
 }
 
 const NIcon = { session: CalendarDays, check: CheckCircle2, user: User, bulb: Lightbulb, chat: MessageCircle, rocket: Rocket }

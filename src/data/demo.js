@@ -185,6 +185,7 @@ export const organizations = [
 ]
 
 // A moment `offset` days from now at h:m Nepal time (UTC+05:45), whatever time zone the browser is in.
+
 const day = (offset, h = 19, m = 0) => {
   const base = new Date(Date.now() + offset * 864e5)
   const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(base) // YYYY-MM-DD
@@ -208,21 +209,9 @@ export const mentorshipRequests = [
 ]
 
 export const challenges = [
-  { id: 'c1', posterType: 'organization', posterId: 'o1', title: 'Our computer lab of 20 PCs is too slow to use', category: 'Hardware / IT', urgency: 'High', tags: ['Linux', 'Old hardware', 'Education'],
-    desc: 'We received 20 donated desktops (2012 era, 2GB RAM, Windows 7). They take 5 minutes to boot and students cannot use a browser. We have unreliable internet (4 Mbps shared). What can we do with no budget?',
-    at: day(-3, 11), responses: [{ name: 'Er. Sujan Basnet', initials: 'SB', color: '#2152d9', text: 'Install a lightweight Linux like Linux Mint XFCE or Lubuntu, and set up Kolibri for offline learning content. I can share a step-by-step guide.', at: day(-2, 8) }] },
-  { id: 'c2', posterType: 'organization', posterId: 'o2', title: 'Need a simple way to track 600 women’s savings group members', category: 'Software / Data', urgency: 'Medium', tags: ['Database', 'Mobile', 'Offline'],
-    desc: 'We manage 24 savings groups using paper registers. Field staff visit monthly. We need something that works offline on cheap Android phones and gives us monthly reports.',
-    at: day(-5, 14), responses: [{ name: 'Prakash Neupane', initials: 'PN', color: '#e8961e', text: 'KoboToolbox or ODK Collect would work offline and are free for NGOs. Pair it with a Google Sheet dashboard.', at: day(-4, 10) }, { name: 'Nisha Shakya', initials: 'NS', color: '#e11d48', text: 'Happy to help design the form flow so it is easy for field staff with low digital literacy.', at: day(-4, 18) }] },
   { id: 'c3', posterType: 'startup', posterId: 's7', title: 'Our booking site is slow for users in Europe', category: 'Cloud / DevOps', urgency: 'Medium', tags: ['Performance', 'CDN', 'React'],
     desc: 'Our servers are in Kathmandu. Page load from Germany is ~9s. We’re a small team and not sure whether to move hosting or add a CDN, and what it would cost.',
     at: day(-1, 9), responses: [] },
-  { id: 'c4', posterType: 'organization', posterId: 'o3', title: 'Website for a youth club got hacked', category: 'Cybersecurity', urgency: 'High', tags: ['WordPress', 'Security'],
-    desc: 'Our WordPress site now redirects to spam pages. A volunteer built it 4 years ago and left. How do we clean it and keep it safe?',
-    at: day(-2, 16), responses: [] },
-  { id: 'c5', posterType: 'organization', posterId: 'o4', title: 'Digitizing ward-level birth and death records', category: 'Software / Data', urgency: 'Low', tags: ['Govtech', 'Data entry', 'Privacy'],
-    desc: 'We have 15 years of handwritten records. Looking for advice on a safe, affordable way to digitize and store them in line with privacy rules.',
-    at: day(-7, 12), responses: [{ name: 'Dr. Asmita Koirala', initials: 'AK', color: '#0891b2', text: 'Happy to connect you with a team that did similar vital-registration work in Rwanda. Key first step: a data protection plan.', at: day(-6, 9) }] },
 ]
 
 // Demo accounts (seed data). Password for all demo accounts: demo123
@@ -232,7 +221,6 @@ export const seedUsers = !DEMO_ENABLED ? [] : [
   { id: 'u-stu', email: 'student@aakar.demo', password: 'demo123', role: 'student', status: 'approved', refId: 'st1', name: 'Aarati Pokharel', initials: 'AP', color: '#e11d48', submittedAt: day(-15), docs: ['Student_ID.jpg', 'Enrollment_letter.pdf'] },
   { id: 'u-sup', email: 'startup@aakar.demo', password: 'demo123', role: 'startup', status: 'approved', refId: 's1', name: 'Anisha Thapa', initials: 'AT', color: '#0f9f6e', submittedAt: day(-30), docs: ['OCR_registration.pdf', 'PAN_certificate.pdf', 'Founder_citizenship.jpg'] },
   { id: 'u-pro', email: 'mentor@aakar.demo', password: 'demo123', role: 'professional', status: 'approved', refId: 'm1', name: 'Er. Sujan Basnet', initials: 'SB', color: '#2152d9', submittedAt: day(-40), docs: ['Passport.pdf', 'Employment_letter.pdf'] },
-  { id: 'u-org', email: 'org@aakar.demo', password: 'demo123', role: 'organization', status: 'approved', refId: 'o1', name: 'Shree Janajyoti Secondary School', initials: 'JS', color: '#2152d9', submittedAt: day(-10), docs: ['School_registration.pdf', 'Authorization_letter.pdf'] },
   // Applications waiting for admin review
   { id: 'u-p1', email: 'pending@aakar.demo', password: 'demo123', role: 'investor', status: 'pending', name: 'Suresh Adhikari', initials: 'SA', color: '#6d4ae6', submittedAt: day(-1, 9),
     profile: { 'Investor type': 'Angel investor', Firm: 'Independent', Country: 'Canada', 'Ticket size': '$20k – $75k', Sectors: 'Agritech, Clean Energy', LinkedIn: 'linkedin.com/in/suresh-adhikari' }, docs: ['Passport.pdf', 'Bank_reference.pdf'] },
@@ -242,8 +230,6 @@ export const seedUsers = !DEMO_ENABLED ? [] : [
     profile: { Institution: 'Mid-Western University', Level: 'Bachelor (2nd year)', Interests: 'Civil Engineering, Study in Japan', City: 'Surkhet' }, docs: ['Student_ID.jpg', 'Enrollment_letter.pdf'] },
   { id: 'u-p4', email: 'roshan@demo.com', password: 'demo123', role: 'professional', status: 'pending', name: 'Dr. Roshan Gautam', initials: 'RG', color: '#0f9f6e', submittedAt: day(0, 7),
     profile: { Title: 'Postdoctoral Fellow', Company: 'ETH Zurich', Country: 'Switzerland', Experience: '6 years', Expertise: 'Renewable Energy, Research / PhD, Scholarships' }, docs: ['Passport.pdf', 'Employment_letter.pdf'] },
-  { id: 'u-p5', email: 'info@greenvalley.np', password: 'demo123', role: 'organization', status: 'pending', name: 'Green Valley Community School', initials: 'GV', color: '#e11d48', submittedAt: day(-2, 16),
-    profile: { 'Organization type': 'School', 'Registration no.': 'DEO-RS-2079-118', District: 'Rasuwa', 'Contact person': 'Hari Prasad Nepal (Principal)' }, docs: ['School_registration.pdf', 'Authorization_letter.pdf'] },
   { id: 'u-p6', email: 'fakeinvestor@demo.com', password: 'demo123', role: 'investor', status: 'rejected', name: 'Quick Returns Ltd', initials: 'QR', color: '#334155', submittedAt: day(-6, 12), rejectReason: 'Could not verify identity documents.',
     profile: { 'Investor type': 'Venture capital', Country: 'Unknown', 'Ticket size': '$1M+' }, docs: ['document.jpg'] },
 ]
@@ -265,10 +251,6 @@ export const seedConversations = [
       { from: 'peer', text: 'Hi Aarati, happy to mentor you! Send me 2–3 labs you’re interested in and your current projects.', at: day(-4, 10) },
       { from: 'me', text: 'Thank you so much sir! I’ll send them tonight.', at: day(-4, 12) },
     ] },
-  { id: 'cv4', ownerId: 'u-org', peer: { name: 'Er. Sujan Basnet', initials: 'SB', color: '#2152d9', subtitle: 'Re: computer lab', kind: 'professional', refId: 'm1' },
-    messages: [
-      { from: 'peer', text: 'Namaste! About your computer lab: Lubuntu will make those PCs usable again. I can join a video call with your IT teacher on Saturday.', at: day(-2, 8) },
-    ] },
 ]
 
 export const autoReplies = {
@@ -277,5 +259,4 @@ export const autoReplies = {
   mentor: ['Happy to help! Let’s set up a 30-minute call this weekend.', 'Great progress. Send me your draft and I’ll review it.', 'Feel free to message me anytime with questions.'],
   student: ['Thank you so much! That really helps.', 'Okay, I’ll prepare that and send it to you.', 'Would Saturday evening Nepal time work?'],
   professional: ['Happy to help. Can you share more details?', 'Let’s get on a quick call to look at it together.'],
-  organization: ['Thank you so much for helping us!', 'Our IT teacher can join a call on Saturday. Would that work?', 'Dhanyabad! We’ll try this and let you know.'],
 }

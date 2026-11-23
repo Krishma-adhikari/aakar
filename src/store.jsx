@@ -20,6 +20,7 @@ const seed = (list) => (DEMO_ENABLED ? list : [])
 const initial = () => ({
   users: seed(demo.seedUsers),
   currentUserId: null,
+
   startups: seed(demo.startups),
   investors: seed(demo.investors),
   mentors: seed(demo.mentors),
@@ -30,11 +31,23 @@ const initial = () => ({
   challenges: seed(demo.challenges),
   conversations: seed(demo.seedConversations),
   saved: DEMO_ENABLED ? { 'u-inv': ['s4'] } : {},
+
+  startups: demo.startups,
+  investors: demo.investors,
+  mentors: demo.mentors,
+  students: demo.students,
+  sessions: demo.sessions,
+  requests: demo.mentorshipRequests,
+  challenges: demo.challenges,
+  conversations: demo.seedConversations,
+  saved: { 'u-inv': ['s4'] },
+
   readNotifs: {},
   readMessages: {}, // { [userId]: [ids of demo messages already read] }
   blocked: {}, // { [userId]: [peer refIds (demo) or user ids] }
   seededAt: new Date().toISOString(), // when the sample dates were generated (demo mode only)
 })
+
 
 // Demo-only shortcut: ?as=student (etc.) signs in as that sample account. Never active in production.
 const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', organization: 'u-org', admin: 'u-admin' }
@@ -52,6 +65,9 @@ function shiftDemoDates(st) {
     sessions: st.sessions.map((se) => (se.remote ? se : { ...se, date: shift(se.date) })),
   }
 }
+
+// TEMPORARY demo shortcut: ?as=student (etc.) signs in as that demo account on load.
+const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', admin: 'u-admin' }
 
 function load() {
   let st = initial()
@@ -340,11 +356,14 @@ function buildEntity(user) {
       const ask = Number(String(r.ask || user.profile?.['Funding ask'] || '50000').replace(/[^\d]/g, '')) || 50000
       return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: [{ name: user.name, role: 'Founder', bg: '' }], traction: [{ k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }], tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
     }
+
     case 'organization': {
       // The listing carries the organization's name, not the contact person's.
       const orgName = (r.orgName || user.profile?.['Organization name'] || '').trim() || user.name
       return ['organizations', { ...base, name: orgName, initials: initialsOf(orgName), color: pickColor(orgName), contact: user.name, type: r.orgType || user.profile?.['Organization type'] || 'NGO', district: r.district || user.profile?.District || '' }]
     }
+
+
     default:
       return [null, null]
   }
@@ -701,7 +720,7 @@ const safety = setTimeout(done, 3000)
 
   const entityOf = useCallback((u) => {
     if (!u?.refId) return null
-    const list = { investor: state.investors, student: state.students, startup: state.startups, professional: state.mentors, organization: state.organizations }[u.role]
+    const list = { investor: state.investors, student: state.students, startup: state.startups, professional: state.mentors }[u.role]
     return list?.find((x) => x.id === u.refId) || null
   }, [state])
 
@@ -1492,7 +1511,11 @@ export function useNotifications() {
       })
     }
 
+
     if (user.role === 'organization' || user.role === 'startup') {
+
+    if (user.role === 'startup') {
+
       state.challenges.filter((c) => c.posterId === entity.id).forEach((c) => c.responses.forEach((r, i) => {
         out.push({ id: `n-${c.id}-${i}`, icon: 'bulb', text: `${r.name} suggested a solution`, sub: c.title, to: '/app/helpdesk', at: r.at })
       }))

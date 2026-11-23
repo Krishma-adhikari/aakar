@@ -10,7 +10,7 @@ const URG = { High: 'badge-red', Medium: 'badge-amber', Low: 'badge-gray' }
 export default function HelpDesk() {
   const { state, user, entity, postChallenge, respondChallenge, startChat, toast } = useStore()
   const nav = useNavigate()
-  const canPost = user.role === 'organization' || user.role === 'startup'
+  const canPost = user.role === 'startup'
   const [tab, setTab] = useState(canPost ? 'mine' : 'open')
   const [q, setQ] = useState('')
   const [cats, setCats] = useState([])
@@ -19,7 +19,7 @@ export default function HelpDesk() {
   const [answer, setAnswer] = useState('')
   const [form, setForm] = useState({ title: '', category: CATEGORIES[0], urgency: 'Medium', desc: '', tags: '', prize: '' })
 
-  const posterOf = (c) => (c.posterType === 'startup' ? state.startups : state.organizations).find((x) => x.id === c.posterId)
+  const posterOf = (c) => state.startups.find((x) => x.id === c.posterId)
   const isMine = (c) => c.posterId === entity.id
 
   let list = state.challenges
@@ -28,7 +28,11 @@ export default function HelpDesk() {
   list = list.filter((c) => (!q || (c.title + c.desc).toLowerCase().includes(q.toLowerCase())) && (!cats.length || cats.includes(c.category)))
 
   const submitPost = () => {
+
     postChallenge({ posterType: user.role === 'startup' ? 'startup' : 'organization', posterId: entity.id, title: form.title, category: form.category, urgency: form.urgency, desc: form.desc, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean), prize: form.prize })
+
+    postChallenge({ posterType: 'startup', posterId: entity.id, title: form.title, category: form.category, urgency: form.urgency, desc: form.desc, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) })
+
     toast('Challenge posted. Professionals in that field will see it.')
     setPosting(false); setTab('mine')
     setForm({ title: '', category: CATEGORIES[0], urgency: 'Medium', desc: '', tags: '', prize: '' })
@@ -36,7 +40,7 @@ export default function HelpDesk() {
 
   const submitAnswer = () => {
     const p = posterOf(answering)
-    respondChallenge(answering.id, { name: user.name, initials: user.initials, color: user.color }, answer, { name: p.name, initials: p.initials, color: p.color, subtitle: `Re: ${answering.title}`, kind: answering.posterType === 'startup' ? 'startup' : 'organization', refId: p.id })
+    respondChallenge(answering.id, { name: user.name, initials: user.initials, color: user.color }, answer, { name: p.name, initials: p.initials, color: p.color, subtitle: `Re: ${answering.title}`, kind: 'startup', refId: p.id })
     toast(`Solution sent to ${p.name}`)
     setAnswering(null); setAnswer('')
     nav('/app/messages')
@@ -50,7 +54,7 @@ export default function HelpDesk() {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1>Tech Help Desk</h1><p>NGOs, schools and startups post technical problems. The diaspora tech community suggests solutions.</p></div>
+        <div><h1>Tech Help Desk</h1><p>Startups post technical problems. The diaspora tech community suggests solutions.</p></div>
         {canPost && <button className="btn btn-primary" onClick={() => setPosting(true)}><Plus size={17} /> Post a challenge</button>}
       </div>
       <div className="filters">
@@ -111,7 +115,7 @@ export default function HelpDesk() {
       {posting && (
         <Modal title="Post a technical challenge" sub="Describe the problem clearly. Experts will reply with suggestions in chat." onClose={() => setPosting(false)} width={620}>
           <div className="grid-2">
-            <div className="field span-2"><label>What’s the problem?</label><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Our school website keeps going down" /></div>
+            <div className="field span-2"><label>What’s the problem?</label><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Our website is slow for users abroad" /></div>
             <div className="field"><label>Category</label><select className="select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></div>
             <div className="field"><label>Urgency</label><select className="select" value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value })}><option>High</option><option>Medium</option><option>Low</option></select></div>
             <div className="field span-2"><label>Details</label><textarea className="textarea" rows={5} value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} placeholder="What have you tried? What equipment, budget and internet do you have?" /></div>

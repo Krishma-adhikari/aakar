@@ -140,17 +140,17 @@ export function StartupProfile() {
   )
 }
 
-// Profile page for students, professionals and organizations
+// Profile page for students and professionals
 export function Profile() {
   const { user, entity, updateEntity, toast } = useStore()
-  const listKey = { student: 'students', professional: 'mentors', organization: 'organizations' }[user.role]
+  const listKey = { student: 'students', professional: 'mentors' }[user.role]
   const [f, setF] = useState(entity)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
   return (
     <div className="page" style={{ maxWidth: 860 }}>
-      <div className="page-head"><div><h1>{user.role === 'organization' ? 'Organization profile' : 'My profile'}</h1><p>Verified on Aakar · {user.email}</p></div></div>
+      <div className="page-head"><div><h1>My profile</h1><p>Verified on Aakar · {user.email}</p></div></div>
       <div className="card card-pad">
-        <div className="row"><Avatar p={entity} size="lg" square={user.role === 'organization'} /><div><h3 style={{ fontSize: 22 }}>{entity.name}</h3><span className="badge badge-green mt-1">Verified</span></div></div>
+        <div className="row"><Avatar p={entity} size="lg" /><div><h3 style={{ fontSize: 22 }}>{entity.name}</h3><span className="badge badge-green mt-1">Verified</span></div></div>
         <div className="grid-2 mt-6">
           {user.role === 'student' && <>
             <div className="field"><label>Institution</label><input className="input" value={f.institution} onChange={set('institution')} /></div>
@@ -163,10 +163,6 @@ export function Profile() {
             <div className="field"><label>Company</label><input className="input" value={f.company} onChange={set('company')} /></div>
             <div className="field span-2"><label>Bio</label><textarea className="textarea" value={f.bio} onChange={set('bio')} /></div>
             <div className="field span-2"><label>Expertise (students are matched on these)</label><ChipSelect options={KEYWORDS} value={f.fields} onChange={(v) => setF({ ...f, fields: v })} max={6} /></div>
-          </>}
-          {user.role === 'organization' && <>
-            <div className="field"><label>Type</label><input className="input" value={f.type} onChange={set('type')} /></div>
-            <div className="field"><label>District</label><input className="input" value={f.district} onChange={set('district')} /></div>
           </>}
         </div>
         <div className="row mt-6" style={{ justifyContent: 'flex-end' }}><button className="btn btn-dark" onClick={() => { updateEntity(listKey, entity.id, f); toast('Profile saved') }}>Save changes</button></div>

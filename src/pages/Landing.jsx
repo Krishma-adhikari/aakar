@@ -204,12 +204,17 @@ function HeroVisual({ startup }) {
 /* ---------- Static content ---------- */
 const pillars = [
   { n: '01', icon: Rocket, grad: 'linear-gradient(135deg,#3a6cf0,#1d47c8)', shade: 'rgba(33,82,217,.7)', color: 'var(--primary)', title: 'Invest in Nepal', text: 'Startups publish their full profile, pitch and funding ask. Diaspora investors browse, save and start a conversation with founders in one click.', pts: ['Full pitch, traction and use of funds', 'Direct chat between investor and founder', 'Investors stay private unless they choose to be visible'] },
+
   { n: '02', icon: Users, grad: 'linear-gradient(135deg,#8b6cf5,#5b3ad6)', shade: 'rgba(109,74,230,.7)', color: 'var(--violet)', title: 'Mentor the next generation', text: 'Students find the right mentor through keyword matching and get guidance on studies, jobs and scholarships from Nepalis abroad.', pts: ['Find mentors by field, country or interest', 'One-to-one mentorship on request', 'Group sessions notify every interested student'] },
   { n: '03', icon: Wrench, grad: 'linear-gradient(135deg,#22b8d8,#0a7f9c)', shade: 'rgba(8,145,178,.7)', color: 'var(--teal)', title: 'Tech Help Desk', text: 'NGOs, schools and startups post the technical problems they face. Engineers anywhere in the world reply with solutions over chat.', pts: ['Post a challenge in minutes', 'Experts send solutions directly', 'Turn advice into ongoing support'] },
+
+  { n: '02', icon: Users, grad: 'linear-gradient(135deg,#8b6cf5,#5b3ad6)', shade: 'rgba(109,74,230,.7)', color: 'var(--violet)', title: 'Mentor the next generation', text: 'Nepali professionals abroad volunteer to guide students on higher studies, jobs and global opportunities, matched by field and interests.', pts: ['Keyword matching between students and mentors', 'One-to-one mentorship on request', 'Group sessions notify every interested student'] },
+  { n: '03', icon: Wrench, grad: 'linear-gradient(135deg,#22b8d8,#0a7f9c)', shade: 'rgba(8,145,178,.7)', color: 'var(--teal)', title: 'Tech Help Desk', text: 'Startups post the technical problems they face. Engineers anywhere in the world reply with solutions over chat.', pts: ['Post a challenge in minutes', 'Experts send solutions directly', 'Turn advice into ongoing support'] },
+
 ]
 
 const steps = [
-  { icon: UserPlus, title: 'Pick your role', text: 'Investor, startup, student, professional or organization.' },
+  { icon: UserPlus, title: 'Pick your role', text: 'Investor, startup, student or professional.' },
   { icon: FileCheck2, title: 'Submit your profile', text: 'Add your details and the documents needed to verify you.' },
   { icon: ShieldCheck, title: 'Get verified', text: 'Our admin team checks every profile, usually within 24 hours.', alt: true },
   { icon: Sparkles, title: 'Start connecting', text: 'Invest, mentor, learn or solve problems with people you can trust.' },
@@ -328,6 +333,7 @@ export default function Landing() {
                 <h3>{p.title}</h3>
                 <p>{p.text}</p>
                 <ul>{p.pts.map((t) => <li key={t}><CheckCircle2 size={16} color={p.color} /> {t}</li>)}</ul>
+
                 {DEMO_ENABLED && (
                   <div className="pillar-preview" style={{ marginTop: 'auto' }}>
                     {p.n === '01' && <div className="row small"><Avatar p={demoStartups[3]} size="sm" square /><div className="grow"><b>{demoStartups[3].name}</b><div className="xs muted">Raising {money(demoStartups[3].ask)} · {demoStartups[3].stage}</div></div><span className="btn btn-primary btn-sm"><MessageCircle size={14} /> Chat</span></div>}
@@ -335,6 +341,13 @@ export default function Landing() {
                     {p.n === '03' && <div className="row small"><span className="avatar sm sq" style={{ backgroundColor: '#0891b2' }}><Lightbulb size={15} /></span><div className="grow"><b>School lab PCs too slow</b><div className="xs muted">2 solutions suggested · Sindhupalchok</div></div></div>}
                   </div>
                 )}
+                
+                <div className="pillar-preview" style={{ marginTop: 'auto' }}>
+                  {p.n === '01' && <div className="row small"><Avatar p={startups[3]} size="sm" square /><div className="grow"><b>{startups[3].name}</b><div className="xs muted">Asking {money(startups[3].ask)} · {startups[3].stage}</div></div><span className="btn btn-primary btn-sm"><MessageCircle size={14} /> Chat</span></div>}
+                  {p.n === '02' && <div className="row small"><Avatar p={mentors[1]} size="sm" /><div className="grow"><b>{mentors[1].name}</b><div className="xs muted">Matched on <span style={{ color: 'var(--violet)', fontWeight: 700 }}>Scholarships · Study in UK</span></div></div></div>}
+                  {p.n === '03' && <div className="row small"><span className="avatar sm sq" style={{ backgroundColor: '#0891b2' }}><Lightbulb size={15} /></span><div className="grow"><b>Booking site slow in Europe</b><div className="xs muted">2 solutions suggested · Kathmandu</div></div></div>}
+                </div>
+
               </div>
             ))}
           </div>
@@ -347,7 +360,7 @@ export default function Landing() {
           <div className="section-head" style={{ marginBottom: 48 }}>
             <span className="eyebrow">How it works</span>
             <h2>Verified people only. <span>That’s the whole point.</span></h2>
-            <p>Every investor, founder, student, mentor and organization is reviewed by an admin before they can use Aakar, so trust is built in from day one.</p>
+            <p>Every investor, founder, student and mentor is reviewed by an admin before they can use Aakar, so trust is built in from day one.</p>
           </div>
           <div className="steps">
             {steps.map((s, i) => (

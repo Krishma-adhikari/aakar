@@ -52,23 +52,34 @@ grant execute on function public.resubmit_application(text, text, text, text, te
 
 
 -- 2) Public data for the landing page (visitors who are not logged in).
---    Only approved startups, only fields that are meant to be public. No ids, emails or documents.
-create or replace view public.public_startups as
-select
-  p.details->'raw'->>'startupName' as name,
-  p.details->'raw'->>'tagline'     as tagline,
-  p.details->'raw'->>'sector'      as sector,
-  p.details->'raw'->>'stage'       as stage,
-  p.details->'raw'->>'location'    as location,
-  p.created_at
-from public.profiles p
-where p.role = 'startup'
-  and p.status = 'approved'
-  and not p.is_admin;
+--    Only approved startups, only fields that are meant to be public. No emails or documents.
+--    The landing page calls this with supabase.rpc('public_startups').
+drop view if exists public.public_startups;
 
-grant select on public.public_startups to anon, authenticated;
+create or replace function public.public_startups()
+returns table (id uuid, name text, tagline text, sector text, stage text, location text, ask numeric)
+language sql
+security definer
+set search_path = public
+as $$
+  select p.id,
+         coalesce(nullif(p.details->'raw'->>'startupName', ''), p.full_name),
+         p.details->'raw'->>'tagline',
+         p.details->'raw'->>'sector',
+         p.details->'raw'->>'stage',
+         p.details->'raw'->>'location',
+         nullif(regexp_replace(coalesce(p.details->'raw'->>'ask', ''), '[^0-9]', '', 'g'), '')::numeric
+  from public.profiles p
+  where p.role = 'startup' and p.status = 'approved' and not p.is_admin
+  order by p.created_at desc
+  limit 6;
+$$;
 
--- Counts for the landing-page numbers (approved members only).
+revoke all on function public.public_startups() from public;
+grant execute on function public.public_startups() to anon, authenticated;
+
+
+-- 3) Counts for the landing-page numbers (approved members only).
 create or replace function public.public_stats()
 returns json
 language sql

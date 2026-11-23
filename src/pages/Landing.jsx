@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowRight, ArrowUpRight, BadgeCheck, Bell, CalendarDays, CheckCircle2, FileCheck2, Globe2, MapPin,
-  MessageCircle, Play, Quote, Rocket, Send, ShieldCheck, Sparkles, Star, UserPlus, Users, TrendingUp, GraduationCap,
+  ArrowRight, ArrowUpRight, BadgeCheck, Bell, CalendarDays, CheckCircle2, FileCheck2, MapPin,
+  MessageCircle, Play, Quote, Rocket, Send, ShieldCheck, Sparkles, Star, UserPlus, Users,
   Menu, X,
 } from 'lucide-react'
 import { Avatar, Logo, Pagoda, ROLES, Skyline, Stupa, ThemeToggle, money, nptParts } from '../components/ui'
@@ -75,65 +75,43 @@ const Spark = ({ style, size = 18 }) => (
   <svg className="sparkle" style={style} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0Z" fill="currentColor" /></svg>
 )
 
-/* ---------- Hero art (optional photo: put hero-nepal.jpg in /public) ---------- */
+/* ---------- Hero backdrop: layered Himalayan ridges, mist and a Nepali pagoda on soft blue ---------- */
 function HeroScene() {
-  const photoUrl = `${import.meta.env.BASE_URL}hero-nepal.jpg`
-  const [photo, setPhoto] = useState(false)
-  useEffect(() => {
-    const img = new Image()
-    img.onload = () => setPhoto(img.naturalWidth > 0)
-    img.src = photoUrl
-  }, [photoUrl])
   return (
-    <svg className="hero-scene" viewBox="0 0 640 580" aria-hidden="true">
+    <svg className="hero-backdrop" viewBox="0 0 640 700" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <defs>
-        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#bcd3ff" /><stop offset=".55" stopColor="#e6eeff" /><stop offset="1" stopColor="#f7f9ff" /></linearGradient>
-        <linearGradient id="far" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8fa9de" /><stop offset="1" stopColor="#c9d8f5" /></linearGradient>
-        <linearGradient id="mid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#5877c0" /><stop offset="1" stopColor="#8aa4dc" /></linearGradient>
-        <linearGradient id="near" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2f4d97" /><stop offset="1" stopColor="#4d6cb5" /></linearGradient>
-        <linearGradient id="temple" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#1b2f66" /><stop offset="1" stopColor="#2d4789" /></linearGradient>
-        <linearGradient id="mist" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset=".5" stopColor="#fff" stopOpacity=".7" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
-        <radialGradient id="sun" cx=".5" cy=".5" r=".5"><stop offset="0" stopColor="#fff" stopOpacity=".95" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
-        <linearGradient id="fadeMask" x1="0" y1="0" x2="0" y2="1"><stop offset=".62" stopColor="#fff" /><stop offset="1" stopColor="#000" /></linearGradient>
-        <linearGradient id="fadeMaskX" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#000" /><stop offset=".22" stopColor="#fff" /></linearGradient>
-        <mask id="sceneMask"><rect width="640" height="580" fill="url(#fadeMask)" /></mask>
-        <mask id="sceneMaskX"><rect width="640" height="580" fill="url(#fadeMaskX)" /></mask>
-        <clipPath id="orb"><circle cx="390" cy="300" r="278" /></clipPath>
+        <linearGradient id="hb-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#cfe0ff" /><stop offset=".55" stopColor="#e8f0ff" /><stop offset="1" stopColor="#f6f9ff" /></linearGradient>
+        <radialGradient id="hb-sun" cx=".5" cy=".5" r=".5"><stop offset="0" stopColor="#fff" stopOpacity=".95" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+        <linearGradient id="hb-far" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#9db8ec" /><stop offset="1" stopColor="#d6e3fa" /></linearGradient>
+        <linearGradient id="hb-mid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#7390d0" /><stop offset="1" stopColor="#bccfee" /></linearGradient>
+        <linearGradient id="hb-near" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3b5ba6" /><stop offset="1" stopColor="#6283c8" /></linearGradient>
+        <linearGradient id="hb-mist" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset=".55" stopColor="#fff" stopOpacity=".75" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
+        <linearGradient id="hb-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset="1" stopColor="#fff" stopOpacity=".5" /></linearGradient>
       </defs>
-      <ellipse cx="330" cy="300" rx="320" ry="250" fill="none" stroke="var(--primary)" strokeOpacity=".18" strokeWidth="1.5" transform="rotate(-18 330 300)" />
-      <g mask="url(#sceneMaskX)"><g mask="url(#sceneMask)"><g clipPath="url(#orb)" className="scene-art">
-        <rect width="640" height="580" fill="url(#sky)" />
-        <circle cx="470" cy="150" r="120" fill="url(#sun)" />
-        <path d="M100 330 L170 250 L215 280 L290 190 L340 235 L400 120 L452 190 L492 160 L560 230 L640 200 L640 580 L100 580 Z" fill="url(#far)" />
-        <path d="M400 120 L424 152 L413 150 L405 165 L396 150 L384 158 L390 138 Z M290 190 L306 210 L298 209 L292 220 L284 210 L276 214 Z M492 160 L508 178 L500 177 L495 186 L487 176 Z" fill="#fff" />
-        <path d="M400 120 L452 190 L430 188 L410 160 Z" fill="#6d8acb" opacity=".45" />
-        <path d="M150 380 L260 280 L300 300 L380 210 L440 100 L520 230 L560 210 L640 290 L640 580 L150 580 Z" fill="url(#mid)" opacity=".9" />
-        <path d="M440 100 L470 150 L458 147 L449 166 L438 150 L424 162 L430 132 Z M380 210 L396 232 L387 230 L380 243 L371 232 Z" fill="#fff" />
-        <path d="M440 100 L520 230 L490 226 L455 170 Z" fill="#3e5ca6" opacity=".4" />
-        <rect y="300" width="640" height="90" fill="url(#mist)" />
-        <path d="M120 460 C 200 400 280 420 340 400 C 400 380 470 395 520 370 C 570 345 610 350 640 340 L640 580 L120 580 Z" fill="url(#near)" />
-        <g fill="#233d80">
-          {Array.from({ length: 22 }).map((_, i) => {
-            const x = 150 + i * 22
-            const y = 430 - Math.sin(i / 3) * 18 - i * 2.4
-            return <path key={i} d={`M ${x} ${y} L ${x + 7} ${y + 22} L ${x - 7} ${y + 22} Z`} />
-          })}
-        </g>
-        <path d="M470 580 L520 360 C 550 335 610 330 650 340 L650 580 Z" fill="#1f3577" />
-        <Pagoda x={598} y={345} s={1.75} fill="url(#temple)" />
-        <g fill="#f6c870" opacity=".85">
-          <rect x="587" y="299" width="6" height="8" rx="1" /><rect x="603" y="299" width="6" height="8" rx="1" />
-          <rect x="591" y="267" width="5" height="7" rx="1" /><rect x="601" y="267" width="5" height="7" rx="1" />
-        </g>
-        <Pagoda x={520} y={392} s={.95} tiers={2} fill="#22397a" />
-        <g fill="#2a448a">
-          <rect x="330" y="470" width="26" height="16" /><path d="M326 470 L343 458 L360 470 Z" />
-          <rect x="372" y="462" width="30" height="18" /><path d="M368 462 L387 448 L406 462 Z" />
-          <rect x="414" y="478" width="22" height="14" /><path d="M410 478 L425 467 L440 478 Z" />
-        </g>
-        <rect y="430" width="640" height="150" fill="url(#mist)" opacity=".6" />
-        {photo && <image href={photoUrl} x="110" y="20" width="560" height="560" preserveAspectRatio="xMidYMid slice" />}
-      </g></g></g>
+      <rect width="640" height="700" fill="url(#hb-sky)" />
+      <circle cx="450" cy="190" r="170" fill="url(#hb-sun)" />
+
+      {/* far range with snow caps */}
+      <path d="M0 440 L70 372 L120 402 L205 300 L262 352 L342 214 L402 330 L452 288 L520 350 L592 308 L640 360 L640 700 L0 700 Z" fill="url(#hb-far)" />
+      <path fill="#fff" opacity=".95" d="M342 214 L372 262 L358 258 L346 276 L334 258 L316 266 Z M205 300 L226 330 L214 327 L206 340 L196 326 L184 332 Z M452 288 L470 314 L460 312 L453 324 L445 312 L434 316 Z" />
+      <path d="M342 214 L402 330 L372 322 L350 270 Z" fill="#7f9bd8" opacity=".35" />
+
+      <rect y="380" width="640" height="110" fill="url(#hb-mist)" />
+
+      {/* middle range */}
+      <path d="M0 540 L92 468 L160 508 L252 428 L336 498 L424 446 L522 516 L640 458 L640 700 L0 700 Z" fill="url(#hb-mid)" />
+      <path fill="#fff" opacity=".85" d="M252 428 L270 452 L260 450 L253 462 L245 450 L234 454 Z" />
+
+      <rect y="470" width="640" height="110" fill="url(#hb-mist)" opacity=".9" />
+
+      {/* near hill with the pagoda */}
+      <path d="M0 612 C 110 566 210 592 320 566 C 440 538 540 556 640 520 L640 700 L0 700 Z" fill="url(#hb-near)" />
+      <Pagoda x={528} y={548} s={1.7} fill="#1d3170" />
+      <g fill="#f6c870" opacity=".85"><rect x="519" y="486" width="5" height="7" rx="1" /><rect x="532" y="486" width="5" height="7" rx="1" /></g>
+      <Pagoda x={96} y={600} s={.8} tiers={2} fill="#2a458d" />
+      <path d="M528 450 L570 470 M528 450 L486 470" stroke="#e7b8c8" strokeWidth="1.2" fill="none" opacity=".8" />
+
+      <rect y="590" width="640" height="110" fill="url(#hb-fade)" />
     </svg>
   )
 }
@@ -144,14 +122,13 @@ function HeroVisual({ startup }) {
   const [msg, setMsg] = useState('')
   const m = demoMentors[0]
   return (
-    <div className="hero-visual" style={{ height: 640 }}>
+    <div className="hero-visual">
       <HeroScene />
-      <Spark style={{ left: 160, top: 22 }} size={22} />
-      <Spark style={{ left: 120, top: 330, animationDelay: '-1.2s', opacity: .6 }} size={12} />
-      <Spark style={{ right: 40, top: 70, animationDelay: '-2s', opacity: .7 }} size={14} />
+      <Spark style={{ right: 36, top: 28, zIndex: 1 }} size={20} />
+      <Spark style={{ left: 28, top: '46%', animationDelay: '-1.2s', opacity: .6, zIndex: 1 }} size={12} />
 
       {startup && (
-        <div className="glass float" style={{ left: 20, top: 60, width: 300, padding: 18 }}>
+        <div className="glass hero-card left" style={{ '--w': '300px', padding: 18 }}>
           <span className="badge badge-blue" style={{ marginBottom: 10 }}>Invest in Nepal</span>
           <div className="row">
             <span className="avatar" style={{ width: 46, height: 46, backgroundColor: startup.color || 'var(--primary)' }}>{startup.initials}</span>
@@ -171,7 +148,7 @@ function HeroVisual({ startup }) {
 
       {DEMO_ENABLED && (
         <>
-          <div className="glass float d2" style={{ right: 40, top: 262, width: 320, padding: 18 }}>
+          <div className="glass hero-card right d2" style={{ '--w': '320px', padding: 18 }}>
             <span className="badge badge-violet" style={{ marginBottom: 10 }}>Mentorship</span>
             <div className="row" style={{ alignItems: 'flex-start' }}>
               <div className="ic-tile" style={{ background: 'var(--primary-50)', color: 'var(--primary)', borderRadius: 99, width: 40, height: 40 }}><Bell size={18} /></div>
@@ -183,7 +160,7 @@ function HeroVisual({ startup }) {
             <button className="btn btn-dark btn-sm btn-block mt-3" style={{ background: 'var(--navy)', color: '#fff' }} onClick={() => nav('/register/student')}>Reserve my seat <ArrowRight size={14} /></button>
           </div>
 
-          <div className="glass float d3" style={{ left: 40, top: 448, width: 310, padding: 16 }}>
+          <div className="glass hero-card left d3" style={{ '--w': '310px', padding: 16 }}>
             <span className="badge badge-teal" style={{ marginBottom: 10 }}>Chat</span>
             <div className="row small">
               <span className="avatar sm" style={{ backgroundColor: '#c0527a' }}>AT</span>
@@ -203,9 +180,9 @@ function HeroVisual({ startup }) {
 
 /* ---------- Static content ---------- */
 const pillars = [
-  { n: '01', icon: Rocket, grad: 'linear-gradient(135deg,#3a6cf0,#1d47c8)', shade: 'rgba(33,82,217,.7)', color: 'var(--primary)', title: 'Invest in Nepal', text: 'Startups publish their full profile, pitch and funding ask. Diaspora investors browse, save and start a conversation with founders in one click.', pts: ['Full pitch, traction and use of funds', 'Direct chat between investor and founder', 'Investors stay private unless they choose to be visible'] },
+  { n: '01', icon: Rocket, grad: 'linear-gradient(135deg,#3a6cf0,#1d47c8)', shade: 'rgba(33,82,217,.7)', color: 'var(--primary)', to: '/register/investor', cta: 'Join as an investor', title: 'Invest in Nepal', text: 'Startups publish their full profile, pitch and funding ask. Diaspora investors browse, save and start a conversation with founders in one click.', pts: ['Full pitch, traction and use of funds', 'Direct chat between investor and founder', 'Investors stay private unless they choose to be visible'] },
 
-  { n: '02', icon: Users, grad: 'linear-gradient(135deg,#8b6cf5,#5b3ad6)', shade: 'rgba(109,74,230,.7)', color: 'var(--violet)', title: 'Mentor the next generation', text: 'Students find the right mentor through keyword matching and get guidance on studies, jobs and scholarships from Nepalis abroad.', pts: ['Find mentors by field, country or interest', 'One-to-one mentorship on request', 'Group sessions notify every interested student'] },
+  { n: '02', icon: Users, grad: 'linear-gradient(135deg,#8b6cf5,#5b3ad6)', shade: 'rgba(109,74,230,.7)', color: 'var(--violet)', to: '/register/student', cta: 'Find a mentor', to2: '/register/professional', cta2: 'Become a mentor', title: 'Mentor the next generation', text: 'Students find the right mentor through keyword matching and get guidance on studies, jobs and scholarships from Nepalis abroad.', pts: ['Find mentors by field, country or interest', 'One-to-one mentorship on request', 'Group sessions notify every interested student'] },
 
 ]
 
@@ -217,7 +194,6 @@ const steps = [
 ]
 
 // Made-up stats and testimonials. Shown in demo mode only, never to real visitors.
-const demoStats = [[TrendingUp, '120+', 'Verified Nepali startups'], [Globe2, '$4.8M', 'Funding requested on Aakar'], [GraduationCap, '2,100+', 'Students mentored']]
 const demoStories = [
   { quote: 'I left Nepal 9 years ago with no one to ask about grad school. On Aakar I spend one evening a month and help 60 students at once.', who: demoMentors[0], role: `${demoMentors[0].title}, ${demoMentors[0].company}`, feature: true },
   { quote: 'Two diaspora angels found us on Aakar in our first week. That chat turned into $140k for our seed round.', who: { initials: 'AT', color: '#0f9f6e', name: 'Anisha Thapa' }, role: 'Founder, Krishi Sathi' },
@@ -266,7 +242,7 @@ export default function Landing() {
       <section className="hero">
         <div className="container hero-grid">
           <div style={{ animation: 'rise .6s ease' }}>
-            <span className="eyebrow">For the 3M+ Nepalis abroad, and everyone at home</span>
+            <span className="eyebrow">For Nepalis abroad, and everyone at home</span>
             <h1 className="mt-6">
               Nepal’s talent,<br />connected to the{' '}
               <span className="hl">world.
@@ -302,16 +278,6 @@ export default function Landing() {
         <div className="tagline-divider">Building a stronger, more innovative Nepal</div>
       </section>
 
-      {DEMO_ENABLED && (
-        <div className="container stats-band">
-          <div className="glass stats-grid" style={{ boxShadow: 'var(--shadow)' }}>
-            {demoStats.map(([I, n, l]) => (
-              <div key={l}><div className="ic-tile" style={{ background: 'var(--primary-50)', color: 'var(--primary)' }}><I size={20} /></div><div><div className="stat-num">{n}</div><div className="stat-label">{l}</div></div></div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <section className="section" id="features">
         <div className="container">
           <div className="section-head center">
@@ -323,16 +289,22 @@ export default function Landing() {
             {pillars.map((p) => (
               <div key={p.n} className="pillar card-hover" style={{ '--accent': p.grad }}>
                 <span className="num">{p.n}</span>
-                <div className="pic" style={{ background: p.grad, '--shade': p.shade }}><p.icon size={24} /></div>
+                <div className="pic" style={{ background: p.grad, '--shade': p.shade }}><p.icon size={26} /></div>
                 <h3>{p.title}</h3>
-                <p>{p.text}</p>
-                <ul>{p.pts.map((t) => <li key={t}><CheckCircle2 size={16} color={p.color} /> {t}</li>)}</ul>
+                <p className="pillar-text">{p.text}</p>
+                <ul>{p.pts.map((t) => <li key={t}><span className="tick" style={{ color: p.color }}><CheckCircle2 size={16} /></span> {t}</li>)}</ul>
 
                 {DEMO_ENABLED && (
-                  <div className="pillar-preview" style={{ marginTop: 'auto' }}>
+                  <div className="pillar-preview">
                     {p.n === '01' && <div className="row small"><Avatar p={demoStartups[3]} size="sm" square /><div className="grow"><b>{demoStartups[3].name}</b><div className="xs muted">Raising {money(demoStartups[3].ask)} · {demoStartups[3].stage}</div></div><span className="btn btn-primary btn-sm"><MessageCircle size={14} /> Chat</span></div>}
-                    {p.n === '02' && <div className="row small"><Avatar p={demoMentors[1]} size="sm" /><div className="grow"><b>{demoMentors[1].name}</b><div className="xs muted">Matched on <span style={{ color: 'var(--violet)', fontWeight: 700 }}>Scholarships · Study in UK</span></div></div></div>}                  </div>
+                    {p.n === '02' && <div className="row small"><Avatar p={demoMentors[1]} size="sm" /><div className="grow"><b>{demoMentors[1].name}</b><div className="xs muted">Matched on <span style={{ color: 'var(--violet)', fontWeight: 700 }}>Scholarships · Study in UK</span></div></div></div>}
+                  </div>
                 )}
+
+                <div className="pillar-cta">
+                  <Link to={p.to} className="btn btn-dark btn-sm">{p.cta} <ArrowRight size={15} /></Link>
+                  {p.to2 && <Link to={p.to2} className="btn btn-ghost btn-sm">{p.cta2}</Link>}
+                </div>
               </div>
             ))}
           </div>
@@ -365,14 +337,17 @@ export default function Landing() {
         <div className="container">
           <div className="section-head center">
             <span className="eyebrow">Who it’s for</span>
-            <h2>One platform, <span>five communities.</span></h2>
+            <h2>One platform, <span>four communities.</span></h2>
+            <p>Pick the role that fits you. Each one is verified by our team before it goes live.</p>
           </div>
           <div className="roles">
             {Object.entries(ROLES).map(([k, r]) => (
               <Link key={k} to={`/register/${k}`} className="role-card card-hover" style={{ '--rc-bg': r.bg }}>
-                <div className="ic-tile" style={{ background: r.grad, color: '#fff', width: 48, height: 48, borderRadius: 15 }}><r.icon size={22} /></div>
-                <h4>{r.label}</h4>
-                <div className="xs bold" style={{ color: r.color }}>{r.who}</div>
+                <div className="ic-tile" style={{ background: r.grad, color: '#fff', width: 52, height: 52, borderRadius: 16 }}><r.icon size={24} /></div>
+                <div>
+                  <h4>{r.label}</h4>
+                  <div className="who" style={{ color: r.color }}>{r.who}</div>
+                </div>
                 <p>{r.blurb}</p>
                 <span className="go">Join as {r.label.toLowerCase()} <ArrowUpRight size={15} /></span>
               </Link>

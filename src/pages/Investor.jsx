@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, BadgeCheck, Bookmark, BookmarkCheck, Calendar, Eye, EyeOff, MapPin, MessageCircle, Search, Sparkles, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BadgeCheck, Bookmark, BookmarkCheck, Calendar, Eye, EyeOff, MapPin, MessageCircle, Rocket, Search, Sparkles, Users } from 'lucide-react'
 import { Avatar, ChipSelect, Empty, Modal, Toggle, money } from '../components/ui'
 import { SECTORS, STAGES } from '../data/demo'
 import { useStore } from '../store'
@@ -25,6 +25,92 @@ export function StartupCard({ s, saved, onSave, why }) {
       <div>
         <div className="row-between small"><span><b>{money(s.raised)}</b> <span className="muted">raised</span></span><span className="muted">Ask <b style={{ color: 'var(--ink)' }}>{money(s.ask)}</b> · {s.equity}% equity</span></div>
         <div className="progress mt-2"><span style={{ width: `${Math.min(100, (s.raised / s.ask) * 100)}%` }} /></div>
+      </div>
+    </div>
+  )
+}
+
+export function InvestorHome() {
+  const { state, user, entity } = useStore()
+  const nav = useNavigate()
+  const savedIds = state.saved[user.id] || []
+  const watchlist = state.startups.filter((s) => savedIds.includes(s.id))
+  const chats = state.conversations.filter((c) => c.ownerId === user.id && c.peer.kind === 'startup')
+  const recs = useMemo(() => recommendStartups(entity, state.startups), [entity, state.startups])
+  const totalAsk = state.startups.reduce((a, s) => a + (s.ask || 0), 0)
+  const totalRaised = state.startups.reduce((a, s) => a + (s.raised || 0), 0)
+  const bySector = Object.entries(state.startups.reduce((o, s) => ({ ...o, [s.sector]: (o[s.sector] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1])
+  const mySectors = entity.sectors || []
+  const kpis = [
+    ['Startups to explore', state.startups.length, Rocket, 'var(--blue)', 'var(--blue-50)'],
+    ['Matched to you', recs.length, Sparkles, 'var(--violet)', 'var(--violet-50, var(--blue-50))'],
+    ['Saved', watchlist.length, Bookmark, 'var(--amber)', 'var(--amber-50)'],
+    ['Founder chats', chats.length, MessageCircle, 'var(--crimson)', 'var(--crimson-50)'],
+  ]
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div><h1>Namaste, {entity.name.split(' ')[0]}</h1><p>{entity.type}{entity.location ? ` · ${entity.location}` : ''}{entity.ticket ? ` · Ticket ${entity.ticket}` : ''}</p></div>
+        <Link to="/app/startups" className="btn btn-primary"><Search size={17} /> Discover startups</Link>
+      </div>
+      <div className="kpis">
+        {kpis.map(([l, v, I, c, bg]) => (
+          <div key={l} className="card kpi"><div className="ic" style={{ background: bg, color: c }}><I size={18} /></div><div className="v">{v}</div><div className="small muted">{l}</div></div>
+        ))}
+      </div>
+
+      <div className="detail-grid mt-6">
+        <div>
+          <div className="row-between"><h3 style={{ fontSize: 22 }}>Recommended for you</h3><Link to="/app/startups" className="small link">See all</Link></div>
+          {recs.length ? (
+            <div className="grid-2 mt-4">
+              {recs.slice(0, 2).map(({ item, reasons }) => <StartupCard key={item.id} s={item} why={reasons} />)}
+            </div>
+          ) : <div className="card mt-4"><Empty icon={Sparkles} title="No matches yet" text="Add sectors and a bio to your profile and we’ll recommend startups." action={<Link to="/app/profile" className="btn btn-dark">Edit profile</Link>} /></div>}
+
+          <h3 className="mt-8" style={{ fontSize: 22 }}>Founder conversations</h3>
+          <div className="card mt-4" style={{ padding: '4px 20px' }}>
+            {chats.length === 0 && <Empty icon={MessageCircle} title="No conversations yet" text="Open a startup and start a chat with its founders." />}
+            {chats.slice(0, 5).map((c) => (
+              <div key={c.id} className="list-row" style={{ cursor: 'pointer' }} onClick={() => nav('/app/messages?c=' + c.id)}>
+                <Avatar p={c.peer} />
+                <div className="grow"><div className="bold small">{c.peer.name}</div><div className="xs muted" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.messages.at(-1)?.text}</div></div>
+                <ArrowRight size={16} color="var(--faint)" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="stack">
+          <div className="card card-pad">
+            <div className="xs faint bold">YOUR INVESTMENT FOCUS</div>
+            <div className="row wrap mt-3" style={{ gap: 6 }}>{mySectors.length ? mySectors.map((s) => <span key={s} className="chip chip-match">{s}</span>) : <span className="small muted">No sectors chosen yet.</span>}</div>
+            <div className="row-between small mt-3"><span className="muted">Typical ticket</span><b>{entity.ticket || '—'}</b></div>
+            <div className="row-between small mt-2"><span className="muted">Visible to startups</span><span className={`badge ${entity.visible ? 'badge-green' : 'badge-gray'}`}>{entity.visible ? 'Yes' : 'No'}</span></div>
+            <Link to="/app/profile" className="btn btn-ghost btn-sm mt-3">Edit profile</Link>
+          </div>
+
+          <div className="card card-pad">
+            <div className="row-between"><div className="xs faint bold">MY WATCHLIST</div><Link to="/app/saved" className="xs link">Manage</Link></div>
+            {watchlist.length === 0 && <p className="small muted mt-3">Nothing saved yet. Tap the bookmark on any startup.</p>}
+            {watchlist.slice(0, 4).map((s) => (
+              <div key={s.id} className="list-row" style={{ cursor: 'pointer' }} onClick={() => nav('/app/startups/' + s.id)}>
+                <Avatar p={s} size="sm" square />
+                <div className="grow"><div className="small bold">{s.name}</div><div className="xs muted">{s.sector} · {s.stage}</div></div>
+                <span className="xs muted">{money(s.ask)}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="card card-pad">
+            <div className="xs faint bold">MARKET SNAPSHOT</div>
+            <div className="row-between small mt-3"><span className="muted">Total being raised</span><b>{money(totalAsk)}</b></div>
+            <div className="row-between small mt-2"><span className="muted">Already committed</span><b>{money(totalRaised)}</b></div>
+            <div className="progress blue mt-3"><span style={{ width: Math.min(100, totalAsk ? (totalRaised / totalAsk) * 100 : 0) + '%' }} /></div>
+            <div className="row wrap mt-3" style={{ gap: 6 }}>{bySector.slice(0, 5).map(([s, n]) => <span key={s} className="badge badge-gray">{s} · {n}</span>)}</div>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -145,14 +231,18 @@ export function StartupDetail() {
               {[['The problem', s.pitch.problem], ['Our solution', s.pitch.solution], ['Market', s.pitch.market], ['Business model', s.pitch.model]].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k} className="card card-pad pitch-block"><h4>{k}</h4><p>{v}</p></div>
               ))}
+              {s.pitchVideo && <a href={s.pitchVideo} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }}>Watch pitch video <ArrowRight size={16} /></a>}
             </div>
           )}
           {tab === 'traction' && (
-            <div className="grid-3">{s.traction.map((t) => <div key={t.k} className="card kpi"><div className="small muted">{t.k}</div><div className="v">{t.v}</div></div>)}</div>
+            <div className="stack" style={{ gap: 16 }}>
+              <div className="grid-3">{s.traction.map((t) => <div key={t.k} className="card kpi"><div className="small muted">{t.k}</div><div className="v">{t.v}</div></div>)}</div>
+              {s.tractionNotes && <div className="card card-pad pitch-block"><h4>Milestones</h4><p>{s.tractionNotes}</p></div>}
+            </div>
           )}
           {tab === 'team' && (
             <div className="stack">{s.founders.map((f) => (
-              <div key={f.name} className="card card-pad row"><Avatar p={{ initials: f.name.split(' ').map((w) => w[0]).join('').slice(0, 2), color: s.color }} size="lg" /><div><div className="bold">{f.name}</div><div className="small muted">{f.role}{f.bg && ` · ${f.bg}`}</div></div></div>
+              <div key={f.name} className="card card-pad row"><Avatar p={{ initials: f.name.split(' ').map((w) => w[0]).join('').slice(0, 2), color: s.color }} size="lg" /><div><div className="bold">{f.name}</div><div className="small muted">{f.role}{f.bg && ` · ${f.bg}`}</div>{f.linkedin && <a href={f.linkedin} target="_blank" rel="noopener noreferrer" className="xs link">LinkedIn</a>}</div></div>
             ))}</div>
           )}
           {tab === 'funds' && (

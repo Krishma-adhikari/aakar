@@ -4,7 +4,7 @@ import { Avatar, Logo, RoleBadge, ThemeToggle, ago } from '../components/ui'
 import SignOutButton from '../components/SignOutButton'
 import {
   Bell, Bookmark, CalendarDays, CheckCircle2, Compass, GraduationCap, Home, Landmark, Lightbulb, LogOut, MessageCircle,
-  Rocket, User, Users, Wallet, Wrench,
+  Rocket, User, Users, Wallet,
 } from 'lucide-react'
 import { useNotifications, useStore } from '../store'
 
@@ -12,17 +12,16 @@ import { useNotifications, useStore } from '../store'
 const NAV = {
 
   investor: [
+    ['/app', 'Dashboard', Home],
     ['/app/startups', 'Discover startups', Compass],
     ['/app/saved', 'Saved', Bookmark],
     ['/app/messages', 'Messages', MessageCircle],
-    ['/app/helpdesk', 'Tech Help Desk', Wrench],
     ['/app/profile', 'My profile', User],
   ],
   startup: [
     ['/app', 'Dashboard', Home],
     ['/app/investors', 'Investors', Landmark],
     ['/app/messages', 'Messages', MessageCircle],
-    ['/app/helpdesk', 'Tech Help Desk', Wrench],
     ['/app/profile', 'My listing', Rocket],
   ],
   student: [
@@ -37,16 +36,9 @@ const NAV = {
     ['/app', 'Home', Home],
     ['/app/sessions', 'My sessions', CalendarDays],
     ['/app/students', 'Matched Students', GraduationCap],
-    ['/app/helpdesk', 'Tech Help Desk', Wrench],
     ['/app/messages', 'Messages', MessageCircle],
     ['/app/profile', 'My profile', User],
   ],
-
-  investor: [['/app/startups', 'Discover startups', Compass], ['/app/saved', 'Saved', Bookmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My profile', User]],
-  startup: [['/app', 'Dashboard', Home], ['/app/investors', 'Investors', Landmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My listing', Rocket]],
-  student: [['/app', 'Home', Home], ['/app/sessions', 'Sessions', CalendarDays], ['/app/mentors', 'Find mentors', Users], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'My profile', User]],
-  professional: [['/app', 'Home', Home], ['/app/sessions', 'My sessions', CalendarDays], ['/app/students', 'Students', GraduationCap], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'My profile', User]],
-
 }
 
 const NIcon = { session: CalendarDays, check: CheckCircle2, user: User, bulb: Lightbulb, chat: MessageCircle, rocket: Rocket }

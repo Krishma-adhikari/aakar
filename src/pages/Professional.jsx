@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bell, CalendarDays, CalendarPlus, Check, GraduationCap, Heart, MessageCircle, Plus, Sparkles, Star, Users, Wrench, X } from 'lucide-react'
+import { Bell, CalendarDays, CalendarPlus, Check, GraduationCap, Heart, MapPin, MessageCircle, Plus, Sparkles, Star, Users, X } from 'lucide-react'
 import { Avatar, Empty, Modal, ago, fmtNPT, sessionWhen } from '../components/ui'
 import { KEYWORDS } from '../data/demo'
 import { useStore, validateMeetingLink } from '../store'
@@ -18,14 +18,37 @@ const PAY_METHODS = [
 // Also rejects fake-looking ones like 9800000000 (all remaining digits the same).
 const isNepaliMobile = (n) => /^(96|97|98)\d{8}$/.test(n) && !/^(\d)\1{7}$/.test(n.slice(2))
 
+// Make any block open the student's details: click or Enter / Space.
+const clickable = (onOpen) => ({
+  role: 'button', tabIndex: 0, style: { cursor: 'pointer' },
+  onClick: onOpen,
+  onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } },
+})
+
+function StudentDetails({ st, common = [], onClose }) {
+  return (
+    <Modal title={st.name} sub={[st.level, st.institution].filter(Boolean).join(' · ')} onClose={onClose} width={560}>
+      <div className="stack" style={{ gap: 14 }}>
+        <div className="row"><Avatar p={st} size="lg" /><div className="small muted">{st.city && <div className="row" style={{ gap: 4 }}><MapPin size={13} /> {st.city}</div>}{st.gapYear && <div>Gap year: {st.gapYear}</div>}</div></div>
+        {st.goal && <div><div className="xs faint bold">GOAL</div><p className="small mt-2" style={{ color: 'var(--ink-2)' }}>{st.goal}</p></div>}
+        <div>
+          <div className="xs faint bold">INTERESTS</div>
+          <div className="row wrap mt-2" style={{ gap: 6 }}>{(st.interests || []).map((i) => <span key={i} className={`chip ${common.includes(i) ? 'chip-match' : ''}`}>{common.includes(i) && <Check size={12} />} {i}</span>)}</div>
+        </div>
+        <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn btn-ghost" onClick={onClose}>Close</button></div>
+      </div>
+    </Modal>
+  )
+}
+
 export function ProHome() {
   const { state, entity, respondRequest, startChat, toast } = useStore()
   const nav = useNavigate()
   const reqs = state.requests.filter((r) => r.mentorId === entity.id)
   const pending = reqs.filter((r) => r.status === 'pending')
   const mySessions = state.sessions.filter((s) => s.hostId === entity.id && new Date(s.date) > new Date()).sort((a, b) => new Date(a.date) - new Date(b.date))
+  const [openStudent, setOpenStudent] = useState(null)
   const reached = mySessions.reduce((a, s) => a + s.registered.length, 0)
-  const openChallenges = state.challenges.filter((c) => c.responses.length === 0).length
 
   return (
     <div className="page">
@@ -52,9 +75,9 @@ export function ProHome() {
               return (
                 <div key={r.id} className="card card-pad">
                   <div className="row" style={{ alignItems: 'flex-start' }}>
-                    <Avatar p={st} />
+                    <div {...clickable(() => setOpenStudent({ st, common }))}><Avatar p={st} /></div>
                     <div className="grow">
-                      <div className="row-between"><div><div className="bold">{st.name}</div><div className="xs muted">{st.level} · {st.institution}</div></div><span className="xs faint">{ago(r.at)}</span></div>
+                      <div className="row-between"><div {...clickable(() => setOpenStudent({ st, common }))}><div className="bold">{st.name}</div><div className="xs muted">{st.level} · {st.institution}</div></div><span className="xs faint">{ago(r.at)}</span></div>
                       <p className="small mt-3" style={{ background: 'var(--paper)', padding: 12, borderRadius: 12, color: 'var(--ink-2)' }}>“{r.message}”</p>
                       <div className="row wrap mt-3" style={{ gap: 6 }}><span className="xs muted">Matched on</span>{common.map((c) => <span key={c} className="chip chip-match">{c}</span>)}</div>
                       <div className="row mt-4">
@@ -75,8 +98,8 @@ export function ProHome() {
                 if (!st) return null
                 return (
                   <div key={r.id} className="list-row">
-                    <Avatar p={st} size="sm" />
-                    <div className="grow"><div className="small bold">{st.name}</div><div className="xs muted">{st.goal}</div></div>
+                    <div className="row grow" {...clickable(() => setOpenStudent({ st, common: overlap(st.interests, entity.fields) }))}><Avatar p={st} size="sm" />
+                    <div className="grow"><div className="small bold">{st.name}</div><div className="xs muted">{st.goal}</div></div></div>
                     <button
                       className="btn btn-ghost btn-sm"
                       onClick={() => {
@@ -92,18 +115,13 @@ export function ProHome() {
               })}
             </div>
           </>}
+          {openStudent && <StudentDetails st={openStudent.st} common={openStudent.common} onClose={() => setOpenStudent(null)} />}
         </div>
         <div className="stack">
           <div className="card card-pad">
             <div className="row-between"><div className="xs faint bold">MY UPCOMING SESSIONS</div><Link to="/app/sessions" className="xs link">Manage</Link></div>
             {mySessions.length === 0 && <p className="small muted mt-3">No sessions scheduled.</p>}
             {mySessions.map((s) => <div key={s.id} className="list-row"><CalendarDays size={18} color="var(--primary)" /><div className="grow"><div className="small bold">{s.title}</div><div className="xs muted">{fmtNPT(s.date, { weekday: 'short', month: 'short', day: 'numeric' })}, {sessionWhen(s.date)} · {s.registered.length} going</div></div></div>)}
-          </div>
-          <div className="card card-pad" style={{ background: 'var(--primary-50)', borderColor: 'var(--primary-100)' }}>
-            <Wrench size={20} color="var(--blue)" />
-            <div className="bold mt-2">{openChallenges} tech challenges need help</div>
-            <p className="small muted mt-1">Nepali startups are waiting for advice.</p>
-            <Link to="/app/helpdesk" className="btn btn-blue btn-sm mt-3">Open Help Desk</Link>
           </div>
         </div>
       </div>
@@ -328,6 +346,7 @@ export function ProSessions() {
 
 export function ProStudents() {
   const { state, entity } = useStore()
+  const [openStudent, setOpenStudent] = useState(null)
   const list = recommendStudents(entity, state.students, { minRelevance: 0.1 }).map((r) => ({ s: r.item, common: overlap(r.item.interests, entity.fields), reasons: r.reasons, relevance: r.relevance }))
   return (
     <div className="page">
@@ -335,7 +354,7 @@ export function ProStudents() {
       {list.length ? (
         <div className="startup-grid">
           {list.map(({ s, common, reasons, relevance }) => (
-            <div key={s.id} className="card card-pad stack" style={{ gap: 12 }}>
+            <div key={s.id} className="card card-pad card-hover stack" {...clickable(() => setOpenStudent({ st: s, common }))} style={{ gap: 12, cursor: 'pointer' }}>
               <div className="row" style={{ alignItems: 'flex-start' }}>
                 <Avatar p={s} size="lg" />
                 <div className="grow"><div className="bold">{s.name}</div><div className="small muted">{s.level}</div><div className="xs muted">{s.institution} · {s.city}</div></div>
@@ -348,6 +367,7 @@ export function ProStudents() {
           ))}
         </div>
       ) : <Empty icon={GraduationCap} title="No matches yet" />}
+      {openStudent && <StudentDetails st={openStudent.st} common={openStudent.common} onClose={() => setOpenStudent(null)} />}
     </div>
   )
 }

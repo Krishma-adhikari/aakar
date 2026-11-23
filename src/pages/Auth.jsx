@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, Check, CheckCircle2, Circle, Clock, Eye, EyeOff, FileText, Loader2, Lock, Mail, ShieldCheck,
-  ShieldAlert, Sparkles, Upload as UploadIcon, UserCheck, XCircle,
+  Plus, ShieldAlert, Sparkles, Upload as UploadIcon, UserCheck, X, XCircle,
 } from 'lucide-react'
 import { Avatar, ChipSelect, Logo, Mountains, ROLES, RoleBadge, StatusBadge, ThemeToggle, Toggle, fmtDate, fmtTime } from '../components/ui'
-import { KEYWORDS, SECTORS, STAGES } from '../data/demo'
+import { BUSINESS_MODELS, KEYWORDS, SECTORS, STAGES } from '../data/demo'
 import { useStore } from '../store'
 import { DEMO_ENABLED } from '../lib/flags'
 import { checkPassword } from '../lib/validation'
@@ -44,6 +44,7 @@ function PasswordStrength({ value }) {
 
 /* ---------- Role-specific registration config ---------- */
 const COUNTRIES = ['USA', 'UK', 'Australia', 'Canada', 'Japan', 'South Korea', 'Germany', 'UAE', 'Qatar', 'India', 'Nepal', 'Other']
+const GAP_YEARS = Array.from({ length: 11 }, (_, i) => String(new Date().getFullYear() - i))
 const FORMS = {
   investor: {
     fields: [
@@ -51,19 +52,20 @@ const FORMS = {
       { key: 'firm', label: 'Firm / fund name', placeholder: 'Independent if angel' },
       { key: 'country', label: 'Country of residence', type: 'select', options: COUNTRIES, required: true },
       { key: 'ticket', label: 'Typical ticket size', type: 'select', options: ['$5k – $25k', '$25k – $100k', '$100k – $500k', '$500k+'], required: true },
-      { key: 'sectors', label: 'Sectors of interest', type: 'chips', options: SECTORS, span: 2, required: true },
-      { key: 'bio', label: 'Short bio', type: 'textarea', span: 2, placeholder: 'Your background and what you look for in a startup' },
+      { key: 'sectors', label: 'Sectors of interest', type: 'chips', options: [...SECTORS, 'Other'], span: 2, required: true },
+      { key: 'sectorsOther', label: 'Other sectors (please specify)', span: 2, placeholder: 'e.g. Hydropower, Handicrafts', required: true, showIf: (v) => (v.sectors || []).includes('Other') },
+      { key: 'bio', label: 'Short bio', type: 'textarea', span: 2, required: true, placeholder: 'Your background and what you look for in a startup' },
       { key: 'visible', label: 'Make my profile visible to startups', type: 'toggle', span: 2, hint: 'Off by default. When off, only startups you message can see you.' },
     ],
     docs: [
       { key: 'id', label: 'Passport or national ID', hint: 'To confirm your identity', required: true },
-      { key: 'proof', label: 'Proof of funds or accreditation', hint: 'Bank reference, accreditation letter or fund registration' },
+      { key: 'photo', label: 'Profile photo', hint: 'A clear photo of your face (JPG or PNG)', accept: 'image' },
+      { key: 'cv', label: 'CV / résumé', hint: 'PDF, JPG or PNG', required: true },
     ],
   },
   startup: {
     fields: [
       { key: 'startupName', label: 'Startup name', required: true },
-      { key: 'tagline', label: 'One-line pitch', placeholder: 'What you do, in one sentence', required: true, span: 2 },
       { key: 'sector', label: 'Sector', type: 'select', options: SECTORS, required: true },
       { key: 'stage', label: 'Stage', type: 'select', options: STAGES, required: true },
       { key: 'location', label: 'Based in (district)', placeholder: 'e.g. Kathmandu', required: true },
@@ -72,14 +74,24 @@ const FORMS = {
       { key: 'regNo', label: 'Company registration no. (OCR)', placeholder: 'OCR-2081-XXXXX', required: true },
       { key: 'ask', label: 'Funding ask (USD)', type: 'number', placeholder: '100000', required: true },
       { key: 'equity', label: 'Equity offered (%)', type: 'number', placeholder: '10' },
-      { key: 'problem', label: 'Problem', type: 'textarea', span: 2, required: true },
-      { key: 'solution', label: 'Solution', type: 'textarea', span: 2, required: true },
+    ],
+    pitch: [
+      { key: 'problemLine', label: 'Problem statement (one line)', placeholder: 'The problem you solve, in one sentence', required: true, span: 2 },
+      { key: 'solution', label: 'Solution', type: 'textarea', span: 2, required: true, placeholder: 'What you built and how it solves the problem' },
+      { key: 'model', label: 'Business model', type: 'select', options: BUSINESS_MODELS, required: true },
+      { key: 'modelOther', label: 'Other business model (please specify)', required: true, showIf: (v) => v.model === 'Other' },
+      { key: 'pitchVideo', label: 'Pitch video link', type: 'url', span: 2, placeholder: 'https://youtube.com/…', hint: 'YouTube, Vimeo, Loom or Google Drive link (public or unlisted)' },
+      { key: 'tractionUsers', label: 'Users / customers so far', placeholder: 'e.g. 1,200' },
+      { key: 'tractionRevenue', label: 'Monthly revenue (USD)', placeholder: 'e.g. 3,500, or 0 if pre-revenue' },
+      { key: 'tractionNotes', label: 'Traction & milestones', type: 'textarea', span: 2, required: true, placeholder: 'Pilots, partnerships, awards, waitlist. Write “none yet” if you are at idea stage.' },
+    ],
+    pitchDocs: [
+      { key: 'deck', label: 'Pitch deck', hint: 'PDF, up to 20 MB', accept: 'pdf', maxMb: 20 },
     ],
     docs: [
       { key: 'ocr', label: 'Company registration certificate (OCR)', hint: 'Office of Company Registrar certificate', required: true },
       { key: 'pan', label: 'PAN / VAT certificate', hint: 'Issued by the Inland Revenue Department', required: true },
       { key: 'cit', label: 'Founder citizenship certificate', hint: 'Front and back in one file', required: true },
-      { key: 'deck', label: 'Pitch deck (optional)', hint: 'PDF, up to 20 MB' },
     ],
   },
   student: {
@@ -87,12 +99,14 @@ const FORMS = {
       { key: 'institution', label: 'School / college / university', required: true, span: 2 },
       { key: 'level', label: 'Current level', type: 'select', options: ['+2 / A-Levels', 'Bachelor (1st year)', 'Bachelor (2nd year)', 'Bachelor (3rd year)', 'Bachelor (final year)', 'Master', 'Recent graduate'], required: true },
       { key: 'city', label: 'City', placeholder: 'e.g. Pokhara', required: true },
+      { key: 'gapYear', label: 'Did you take a gap year?', type: 'select', options: ['No', 'Yes'], required: true },
+      { key: 'gapYearWhen', label: 'Which year was your gap year?', type: 'select', options: GAP_YEARS, required: true, showIf: (v) => v.gapYear === 'Yes' },
       { key: 'interests', label: 'Interests (used to match you with mentors and sessions)', type: 'chips', options: KEYWORDS, span: 2, required: true, max: 6, hint: 'Pick up to 6' },
       { key: 'goal', label: 'Your main goal', type: 'textarea', span: 2, placeholder: 'e.g. MS in Computer Science in the USA with a scholarship' },
     ],
     docs: [
       { key: 'sid', label: 'Student ID card', hint: 'Photo of the front of your ID', required: true },
-      { key: 'enroll', label: 'Enrollment letter or latest transcript', hint: 'Shows you are currently enrolled' },
+      { key: 'resume', label: 'Resume / CV', hint: 'PDF, JPG or PNG', required: true },
     ],
   },
   professional: {
@@ -110,6 +124,7 @@ const FORMS = {
     docs: [
       { key: 'id', label: 'Passport or ID', hint: 'To confirm you are Nepali or of Nepali origin', required: true },
       { key: 'emp', label: 'Proof of employment', hint: 'Employment letter, work ID or payslip (amounts hidden)', required: true },
+      { key: 'cv', label: 'CV / résumé', hint: 'PDF, JPG or PNG', required: true },
     ],
   },
 }
@@ -166,16 +181,22 @@ export function RoleSelect() {
 /* ---------- File picker (keeps the real File so it can be uploaded to Supabase Storage) ---------- */
 const MAX_MB = 10
 const OK_TYPES = ['application/pdf', 'image/jpeg', 'image/png']
+const ACCEPTS = {
+  image: { types: ['image/jpeg', 'image/png'], attr: '.jpg,.jpeg,.png,image/jpeg,image/png', msg: 'Use a JPG or PNG image.' },
+  pdf: { types: ['application/pdf'], attr: '.pdf,application/pdf', msg: 'Use a PDF file.' },
+  any: { types: OK_TYPES, attr: '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png', msg: 'Use a PDF, JPG or PNG file.' },
+}
 
-function FileUpload({ label, hint, required, file, onFile }) {
+function FileUpload({ label, hint, required, file, onFile, accept, maxMb = MAX_MB }) {
+  const acc = ACCEPTS[accept] || ACCEPTS.any
   const ref = useRef(null)
   const [err, setErr] = useState('')
   const pick = (e) => {
     const f = e.target.files?.[0]
     e.target.value = ''
     if (!f) return
-    if (!OK_TYPES.includes(f.type)) { setErr('Use a PDF, JPG or PNG file.'); return }
-    if (f.size > MAX_MB * 1024 * 1024) { setErr(`The file is larger than ${MAX_MB} MB.`); return }
+    if (!acc.types.includes(f.type)) { setErr(acc.msg); return }
+    if (f.size > maxMb * 1024 * 1024) { setErr(`The file is larger than ${maxMb} MB.`); return }
     setErr('')
     onFile(f.name, f)
   }
@@ -189,7 +210,7 @@ function FileUpload({ label, hint, required, file, onFile }) {
         <div className="xs muted">{file ? file : hint}</div>
         {err && <div className="xs mt-1" style={{ color: '#dc2626' }}>{err}</div>}
       </div>
-      <input ref={ref} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={pick} style={{ display: 'none' }} />
+      <input ref={ref} type="file" accept={acc.attr} onChange={pick} style={{ display: 'none' }} />
       <button type="button" className="btn btn-soft btn-sm" onClick={() => ref.current?.click()}>{file ? 'Replace' : 'Upload'}</button>
     </div>
   )
@@ -220,10 +241,12 @@ function Field({ f, value, onChange, error }) {
 }
 
 const STEP_NAMES = ['Account', 'Profile', 'Verification', 'Review']
+const STARTUP_STEPS = ['Account', 'Profile', 'Pitch', 'Verification', 'Review']
 
 export function Register() {
   const { role } = useParams()
   const cfg = FORMS[role]
+  const stepNames = role === 'startup' ? STARTUP_STEPS : STEP_NAMES
   const r = ROLES[role]
   const { register } = useStore()
   const nav = useNavigate()
@@ -235,8 +258,13 @@ export function Register() {
   const [errors, setErrors] = useState({})
   const [showPw, setShowPw] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [execs, setExecs] = useState([{ name: '', role: '', bio: '', linkedin: '' }]) // startup: executive team
+  const [funds, setFunds] = useState([{ label: '', pct: '' }]) // startup: use of funds
 
   if (!cfg) return <Navigate to="/register" replace />
+  const stepKey = stepNames[step]
+  const visibleFields = (list = []) => list.filter((f) => !f.showIf || f.showIf(vals))
+  const fundsTotal = funds.reduce((a, r) => a + (Number(r.pct) || 0), 0)
 
   const validate = () => {
     const e = {}
@@ -247,33 +275,75 @@ export function Register() {
       if (acc.confirm !== acc.password) e.confirm = 'Passwords do not match'
       if (!acc.agree) e.agree = 'Please accept to continue'
     }
-    if (step === 1) cfg.fields.forEach((f) => {
+    if (step === 1) cfg.fields.filter((f) => !f.showIf || f.showIf(vals)).forEach((f) => {
       const v = vals[f.key]
-      if (f.required && (v === undefined || v === '' || (Array.isArray(v) && !v.length))) e[f.key] = 'Required'
+      if (f.required && (v === undefined || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length))) e[f.key] = 'Required'
     })
-    if (step === 2) cfg.docs.forEach((d) => { if (d.required && !docs[d.key]) e['doc-' + d.key] = 'Required' })
+    if (stepKey === 'Pitch') {
+      visibleFields(cfg.pitch).forEach((f) => { if (f.required && !String(vals[f.key] ?? '').trim()) e[f.key] = 'Required' })
+      if (vals.pitchVideo && !/^https?:\/\/\S+$/i.test(vals.pitchVideo.trim())) e.pitchVideo = 'Enter a full link starting with https://'
+      execs.forEach((m, i) => {
+        if (!m.name.trim() || !m.role.trim() || !m.bio.trim()) e['exec-' + i] = 'Name, role and bio are required'
+        else if (!/^https?:\/\/([\w-]+\.)*linkedin\.com\/\S+/i.test(m.linkedin.trim())) e['exec-' + i] = 'Add a valid LinkedIn profile link (https://linkedin.com/in/…)'
+      })
+      if (funds.some((r) => !r.label.trim() || !(Number(r.pct) > 0))) e.funds = 'Give every row a use and a percentage'
+      else if (fundsTotal !== 100) e.funds = `Percentages must add up to 100 (now ${fundsTotal})`
+    }
+    if (stepKey === 'Verification') cfg.docs.forEach((d) => { if (d.required && !docs[d.key]) e['doc-' + d.key] = 'Required' })
     setErrors(e)
     return !Object.keys(e).length
   }
 
-  const next = () => { if (validate()) setStep((s) => s + 1) }
+  const next = () => {
+    if (!validate()) return
+    if (stepKey === 'Profile' && role === 'startup') setExecs((p) => (p[0].name ? p : [{ ...p[0], name: acc.name.trim() }, ...p.slice(1)]))
+    setStep((s) => s + 1)
+  }
 
   const profileSummary = () => {
     const out = {}
-    cfg.fields.forEach((f) => {
+    visibleFields([...cfg.fields, ...(cfg.pitch || [])]).forEach((f) => {
       const v = vals[f.key]
       if (v === undefined || v === '') return
       out[f.label.replace(/ \(.*\)$/, '')] = Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)
     })
+    if (role === 'startup') {
+      out['Executive team'] = execs.map((m) => `${m.name} (${m.role})`).join(', ')
+      out['Use of funds'] = funds.map((r) => `${r.label} ${r.pct}%`).join(', ')
+    }
     return out
+  }
+
+  // What gets saved. For startups, derive the fields the listing already uses (tagline, problem, model, use of funds).
+  const rawData = () => {
+    if (role !== 'startup') return vals
+    const { model, modelOther, ...rest } = vals
+    return {
+      ...rest,
+      problem: vals.problemLine,
+      tagline: (vals.solution || '').trim().split(/(?<=[.!?])\s/)[0].slice(0, 140),
+      model: model === 'Other' ? modelOther : model,
+      execs: execs.map((m) => ({ name: m.name.trim(), role: m.role.trim(), bio: m.bio.trim(), linkedin: m.linkedin.trim() })),
+      useOfFunds: funds.map((r) => ({ label: r.label.trim(), pct: Number(r.pct) })),
+    }
+  }
+  const fileLabel = (key) => cfg.docs.find((d) => d.key === key)?.label || cfg.pitchDocs?.find((d) => d.key === key)?.label
+    || (key.startsWith('execphoto-') ? 'Executive photo: ' + (execs[Number(key.split('-')[1])]?.name || '') : key)
+  const setFile = (key) => (name, file) => { setDocs((p) => ({ ...p, [key]: name })); setFiles((p) => ({ ...p, [key]: file })) }
+  const setExec = (i, k, v) => setExecs((p) => p.map((m, j) => (j === i ? { ...m, [k]: v } : m)))
+  const removeLastExec = () => {
+    const key = 'execphoto-' + (execs.length - 1)
+    setExecs((p) => p.slice(0, -1))
+    setDocs((p) => { const n = { ...p }; delete n[key]; return n })
+    setFiles((p) => { const n = { ...p }; delete n[key]; return n })
   }
 
   const submit = async () => {
     setSubmitting(true)
     const res = await register({
       role, name: acc.name.trim(), email: acc.email.trim(), password: acc.password,
-      profile: { Phone: acc.phone, ...profileSummary() }, raw: vals, docs: Object.values(docs),
-      files: Object.entries(files).map(([key, file]) => ({ key, file, label: cfg.docs.find((d) => d.key === key)?.label || key })),
+      profile: { Phone: acc.phone, ...profileSummary() }, raw: rawData(), docs: Object.values(docs),
+      files: Object.entries(files).map(([key, file]) => ({ key, file, label: fileLabel(key) })),
     })
     setSubmitting(false)
     if (res.error) { setErrors({ email: res.error }); setStep(0); return }
@@ -304,10 +374,10 @@ export function Register() {
       </div>
       <div style={{ maxWidth: 720 }}>
         <div className="stepper">
-          {STEP_NAMES.map((n, i) => (
+          {stepNames.map((n, i) => (
             <div key={n} className="row" style={{ gap: 8 }}>
               <div className={`s ${i === step ? 'active' : i < step ? 'done' : ''}`}><span className="n">{i < step ? <Check size={13} /> : i + 1}</span>{n}</div>
-              {i < STEP_NAMES.length - 1 && <span className="bar" />}
+              {i < stepNames.length - 1 && <span className="bar" />}
             </div>
           ))}
         </div>
@@ -355,28 +425,75 @@ export function Register() {
             <h1 style={{ fontSize: 32 }}>Your {role === 'startup' ? 'startup profile & pitch' : 'profile'}</h1>
             <p className="muted mt-2">{role === 'startup' ? 'This is what investors will see. You can add more detail after you’re verified.' : 'This helps us verify you and match you with the right people.'}</p>
             <div className="grid-2 mt-6">
-              {cfg.fields.map((f) => <Field key={f.key} f={f} value={vals[f.key]} error={errors[f.key]} onChange={(v) => setVals((p) => ({ ...p, [f.key]: v }))} />)}
+              {visibleFields(cfg.fields).map((f) => <Field key={f.key} f={f} value={vals[f.key]} error={errors[f.key]} onChange={(v) => setVals((p) => ({ ...p, [f.key]: v }))} />)}
             </div>
           </>
         )}
 
-        {step === 2 && (
+        {stepKey === 'Pitch' && (
+          <>
+            <h1 style={{ fontSize: 32 }}>Your pitch</h1>
+            <p className="muted mt-2">This is what investors read first. Be clear and specific.</p>
+            <div className="grid-2 mt-6">
+              {visibleFields(cfg.pitch).map((f) => <Field key={f.key} f={f} value={vals[f.key]} error={errors[f.key]} onChange={(v) => setVals((p) => ({ ...p, [f.key]: v }))} />)}
+            </div>
+            <div className="stack mt-4">
+              {cfg.pitchDocs.map((d) => <FileUpload key={d.key} label={d.label} hint={d.hint} accept={d.accept} maxMb={d.maxMb} file={docs[d.key]} onFile={setFile(d.key)} />)}
+            </div>
+
+            <h3 className="mt-8" style={{ fontSize: 22 }}>Executive team</h3>
+            <p className="small muted mt-1">Add the people investors will be backing. Photo is optional.</p>
+            <div className="stack mt-4">
+              {execs.map((m, i) => (
+                <div key={i} className="card card-pad stack" style={{ gap: 12 }}>
+                  <div className="row-between">
+                    <b className="small">{i === 0 ? 'Executive 1 (you)' : 'Executive ' + (i + 1)}</b>
+                    {i > 0 && i === execs.length - 1 && <button type="button" className="btn btn-ghost btn-sm" onClick={removeLastExec}><X size={14} /> Remove</button>}
+                  </div>
+                  <div className="grid-2">
+                    <div className="field"><label>Full name <span className="req">*</span></label><input className="input" value={m.name} onChange={(e) => setExec(i, 'name', e.target.value)} /></div>
+                    <div className="field"><label>Role <span className="req">*</span></label><input className="input" value={m.role} onChange={(e) => setExec(i, 'role', e.target.value)} placeholder="e.g. CEO, CTO" /></div>
+                    <div className="field span-2"><label>LinkedIn profile <span className="req">*</span></label><input className="input" type="url" value={m.linkedin} onChange={(e) => setExec(i, 'linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></div>
+                    <div className="field span-2"><label>Short bio <span className="req">*</span></label><textarea className="textarea" value={m.bio} onChange={(e) => setExec(i, 'bio', e.target.value)} placeholder="Background and relevant experience" /></div>
+                  </div>
+                  <FileUpload label="Photo" hint="A clear photo (JPG or PNG)" accept="image" file={docs['execphoto-' + i]} onFile={setFile('execphoto-' + i)} />
+                  {errors['exec-' + i] && <span className="err">{errors['exec-' + i]}</span>}
+                </div>
+              ))}
+            </div>
+            {execs.length < 4 && <button type="button" className="btn btn-soft btn-sm mt-3" onClick={() => setExecs((p) => [...p, { name: '', role: '', bio: '', linkedin: '' }])}><Plus size={14} /> Add another executive</button>}
+
+            <h3 className="mt-8" style={{ fontSize: 22 }}>Use of funds</h3>
+            <p className="small muted mt-1">Where will the money you raise go? Percentages must add up to 100.</p>
+            <div className="stack mt-4" style={{ gap: 10 }}>
+              {funds.map((r, i) => (
+                <div key={i} className="row" style={{ gap: 10 }}>
+                  <input className="input grow" value={r.label} placeholder="e.g. Product development" onChange={(e) => setFunds((p) => p.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+                  <input className="input" style={{ width: 100 }} type="number" min="1" max="100" value={r.pct} placeholder="%" onChange={(e) => setFunds((p) => p.map((x, j) => (j === i ? { ...x, pct: e.target.value } : x)))} />
+                  <button type="button" className="icon-btn" aria-label="Remove row" disabled={funds.length === 1} onClick={() => setFunds((p) => p.filter((_, j) => j !== i))}><X size={16} /></button>
+                </div>
+              ))}
+            </div>
+            <div className="row-between mt-3">
+              <button type="button" className="btn btn-soft btn-sm" onClick={() => setFunds((p) => [...p, { label: '', pct: '' }])}><Plus size={14} /> Add row</button>
+              <span className="small" style={{ color: fundsTotal === 100 ? 'var(--green)' : 'var(--muted)' }}>Total: <b>{fundsTotal}%</b></span>
+            </div>
+            {errors.funds && <span className="err">{errors.funds}</span>}
+          </>
+        )}
+
+        {stepKey === 'Verification' && (
           <>
             <h1 style={{ fontSize: 32 }}>Verification documents</h1>
             <p className="muted mt-2">Only Aakar admins can see these. They are used to verify your {role === 'startup' ? 'company' : 'identity'} and are never shown publicly.</p>
             <div className="stack mt-6">
               {cfg.docs.map((d) => (
                 <div key={d.key}>
-                  <FileUpload label={d.label} hint={d.hint} required={d.required} file={docs[d.key]} onFile={(name, file) => { setDocs((p) => ({ ...p, [d.key]: name })); setFiles((p) => ({ ...p, [d.key]: file })) }} />
+                  <FileUpload label={d.label} hint={d.hint} required={d.required} file={docs[d.key]} accept={d.accept} onFile={(name, file) => { setDocs((p) => ({ ...p, [d.key]: name })); setFiles((p) => ({ ...p, [d.key]: file })) }} />
                   {errors['doc-' + d.key] && <span className="err">Please upload this document</span>}
                 </div>
               ))}
             </div>
-            {DEMO_ENABLED && (
-              <button type="button" className="btn btn-soft btn-sm mt-4" onClick={() => { setFiles({}); setDocs(Object.fromEntries(cfg.docs.map((d) => [d.key, d.label.split(' ')[0] + '_sample.pdf']))) }}>
-                <Sparkles size={14} /> Demo: attach sample files
-              </button>
-            )}
             <div className="card mt-6" style={{ padding: 16, background: 'var(--blue-50)', borderColor: 'var(--primary-100)', display: 'flex', gap: 12 }}>
               <Lock size={18} color="var(--blue)" style={{ flexShrink: 0, marginTop: 2 }} />
               <div className="small">Your files are used for verification only. Use clear photos or PDF scans.</div>
@@ -384,7 +501,7 @@ export function Register() {
           </>
         )}
 
-        {step === 3 && (
+        {stepKey === 'Review' && (
           <>
             <h1 style={{ fontSize: 32 }}>Review and submit</h1>
             <p className="muted mt-2">After you submit, an admin will review your application. You’ll get access once you’re verified.</p>
@@ -403,7 +520,7 @@ export function Register() {
 
         <div className="row-between mt-8">
           {step > 0 ? <button className="btn btn-ghost" onClick={() => setStep(step - 1)}><ArrowLeft size={16} /> Back</button> : <span />}
-          {step < 3
+          {step < stepNames.length - 1
             ? <button className="btn btn-primary btn-lg" onClick={next}>Continue <ArrowRight size={18} /></button>
             : <button className="btn btn-primary btn-lg" onClick={submit} disabled={submitting}>{submitting ? <><Loader2 size={18} className="spin" /> Submitting…</> : <>Submit for verification <ShieldCheck size={18} /></>}</button>}
         </div>
@@ -413,12 +530,6 @@ export function Register() {
 }
 
 /* ---------- Login with verification check ---------- */
-const DEMO = [
-  ['investor@aakar.demo', 'investor', 'Investor'], ['startup@aakar.demo', 'startup', 'Startup founder'], ['student@aakar.demo', 'student', 'Student'],
-  ['mentor@aakar.demo', 'professional', 'Professional'], ['admin@aakar.demo', 'admin', 'Admin'],
-  ['pending@aakar.demo', 'investor', 'Pending account'], ['fakeinvestor@demo.com', 'investor', 'Rejected account'],
-]
-
 export function Login() {
   const { login, setCurrent } = useStore()
   const nav = useNavigate()

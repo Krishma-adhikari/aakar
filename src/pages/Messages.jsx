@@ -311,7 +311,7 @@ export default function Messages() {
           </div>
         ) : (
           <div style={{ display: 'grid', placeItems: 'center' }}>
-            <Empty icon={MessageCircle} title="No conversation selected" text="Pick a chat from the list, or start one from a startup, mentor or help desk post." />
+            <Empty icon={MessageCircle} title="No conversation selected" text="Pick a chat from the list, or start one from a startup or mentor." />
           </div>
         )}
       </div>

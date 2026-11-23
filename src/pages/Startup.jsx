@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Eye, EyeOff, Landmark, MapPin, MessageCircle, Sparkles, TrendingUp, Users, Wrench } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, Landmark, MapPin, MessageCircle, Plus, Sparkles, TrendingUp, Users, X } from 'lucide-react'
 import { Avatar, ChipSelect, Empty, Modal, money } from '../components/ui'
-import { KEYWORDS, SECTORS, STAGES } from '../data/demo'
+import { BUSINESS_MODELS, KEYWORDS, SECTORS, STAGES } from '../data/demo'
 import { useStore } from '../store'
 import { recommendInvestors } from '../lib/recommend'
 import { StartupCard } from './Investor'
@@ -53,12 +53,6 @@ export function StartupHome() {
             <div className="bold mt-2">{state.investors.filter((i) => i.visible).length} investors are open to pitches</div>
             <p className="small muted mt-1">Some investors choose to make their profile visible to startups.</p>
             <Link to="/app/investors" className="btn btn-blue btn-sm mt-3">Browse investors</Link>
-          </div>
-          <div className="card card-pad">
-            <Wrench size={20} color="var(--teal)" />
-            <div className="bold mt-2">Stuck on a tech problem?</div>
-            <p className="small muted mt-1">Post it on the Help Desk and get advice from engineers abroad.</p>
-            <Link to="/app/helpdesk" className="btn btn-ghost btn-sm mt-3">Open Help Desk</Link>
           </div>
         </div>
       </div>
@@ -113,28 +107,106 @@ export function InvestorsDirectory() {
 
 export function StartupProfile() {
   const { entity: s, updateEntity, toast } = useStore()
-  const [f, setF] = useState({ tagline: s.tagline, sector: s.sector, stage: s.stage, location: s.location, ask: s.ask, equity: s.equity, team: s.team, ...s.pitch })
+  const [f, setF] = useState({ tagline: s.tagline, sector: s.sector, stage: s.stage, location: s.location, founded: s.founded, ask: s.ask, equity: s.equity, team: s.team, pitchVideo: s.pitchVideo || '', tractionNotes: s.tractionNotes || '', ...s.pitch })
+  const [founders, setFounders] = useState(s.founders?.length ? s.founders : [{ name: '', role: '', bg: '', linkedin: '' }])
+  const [funds, setFunds] = useState(s.useOfFunds?.length ? s.useOfFunds : [{ label: '', pct: '' }])
+  const [metrics, setMetrics] = useState(s.traction || [])
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
-  const save = () => {
-    updateEntity('startups', s.id, { tagline: f.tagline, sector: f.sector, stage: f.stage, location: f.location, ask: Number(f.ask), equity: Number(f.equity), team: Number(f.team), pitch: { problem: f.problem, solution: f.solution, market: f.market, model: f.model } })
-    toast('Listing updated. Investors see the changes right away.')
+  const setFounder = (i, k, v) => setFounders((p) => p.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
+  const total = funds.reduce((a, r) => a + (Number(r.pct) || 0), 0)
+  const models = !f.model || BUSINESS_MODELS.includes(f.model) ? BUSINESS_MODELS : [f.model, ...BUSINESS_MODELS]
+
+  const [saving, setSaving] = useState(false)
+  const save = async () => {
+    if (f.pitchVideo && !/^https?:\/\/\S+$/i.test(f.pitchVideo.trim())) { toast('Pitch video must be a full link starting with https://'); return }
+    if (founders.some((x) => !x.name.trim() || !x.role.trim())) { toast('Every executive needs a name and a role.'); return }
+    if (founders.some((x) => x.linkedin && !/^https?:\/\/([\w-]+\.)*linkedin\.com\/\S+/i.test(x.linkedin.trim()))) { toast('Use full LinkedIn links (https://linkedin.com/in/…).'); return }
+    if (funds.some((r) => !r.label.trim() || !(Number(r.pct) > 0)) || total !== 100) { toast('Use of funds: fill every row and make the percentages add up to 100.'); return }
+    setSaving(true)
+    const ok = await updateEntity('startups', s.id, {
+      tagline: f.tagline, sector: f.sector, stage: f.stage, location: f.location, founded: Number(f.founded) || s.founded,
+      ask: Number(f.ask), equity: Number(f.equity), team: Number(f.team),
+      pitchVideo: f.pitchVideo.trim(), tractionNotes: f.tractionNotes,
+      pitch: { problem: f.problem, solution: f.solution, market: f.market, model: f.model },
+      founders: founders.map((x) => ({ name: x.name.trim(), role: x.role.trim(), bg: (x.bg || '').trim(), linkedin: (x.linkedin || '').trim() })),
+      useOfFunds: funds.map((r) => ({ label: r.label.trim(), pct: Number(r.pct) })),
+      traction: metrics.filter((m) => m.k.trim() && String(m.v).trim()),
+    })
+    setSaving(false)
+    if (ok) toast('Listing updated. Investors see the changes right away.')
   }
   return (
     <div className="page" style={{ maxWidth: 900 }}>
       <div className="page-head"><div><h1>My listing</h1><p>Your public profile, pitch and funding ask.</p></div><Link to={'/app/startups/' + s.id} className="btn btn-ghost"><Eye size={16} /> Preview</Link></div>
       <div className="card card-pad">
-        <div className="row"><Avatar p={s} size="lg" square /><div><h3 style={{ fontSize: 22 }}>{s.name}</h3><div className="small muted">Founded {s.founded}</div></div></div>
-        <div className="grid-2 mt-6">
-          <div className="field span-2"><label>One-line pitch</label><input className="input" value={f.tagline} onChange={set('tagline')} /></div>
+        <div className="row"><Avatar p={s} size="lg" square /><div><h3 style={{ fontSize: 22 }}>{s.name}</h3><div className="small muted">Founded {s.founded} · {s.sector}</div></div></div>
+
+        <h3 className="mt-6" style={{ fontSize: 18 }}>Company</h3>
+        <div className="grid-2 mt-3">
+          <div className="field span-2"><label>Tagline (shown on your card)</label><input className="input" value={f.tagline} onChange={set('tagline')} /></div>
           <div className="field"><label>Sector</label><select className="select" value={f.sector} onChange={set('sector')}>{SECTORS.map((x) => <option key={x}>{x}</option>)}</select></div>
           <div className="field"><label>Stage</label><select className="select" value={f.stage} onChange={set('stage')}>{STAGES.map((x) => <option key={x}>{x}</option>)}</select></div>
-          <div className="field"><label>Location</label><input className="input" value={f.location} onChange={set('location')} /></div>
+          <div className="field"><label>Based in</label><input className="input" value={f.location} onChange={set('location')} /></div>
+          <div className="field"><label>Year founded</label><input type="number" className="input" value={f.founded} onChange={set('founded')} /></div>
           <div className="field"><label>Team size</label><input type="number" className="input" value={f.team} onChange={set('team')} /></div>
           <div className="field"><label>Funding ask (USD)</label><input type="number" className="input" value={f.ask} onChange={set('ask')} /></div>
           <div className="field"><label>Equity offered (%)</label><input type="number" className="input" value={f.equity} onChange={set('equity')} /></div>
-          {[['problem', 'Problem'], ['solution', 'Solution'], ['market', 'Market'], ['model', 'Business model']].map(([k, l]) => <div key={k} className="field span-2"><label>{l}</label><textarea className="textarea" value={f[k]} onChange={set(k)} /></div>)}
         </div>
-        <div className="row mt-6" style={{ justifyContent: 'flex-end' }}><button className="btn btn-dark" onClick={save}>Save listing</button></div>
+
+        <h3 className="mt-8" style={{ fontSize: 18 }}>Pitch</h3>
+        <div className="grid-2 mt-3">
+          <div className="field span-2"><label>Problem statement (one line)</label><input className="input" value={f.problem || ''} onChange={set('problem')} /></div>
+          <div className="field span-2"><label>Solution</label><textarea className="textarea" value={f.solution || ''} onChange={set('solution')} /></div>
+          <div className="field"><label>Business model</label><select className="select" value={f.model || ''} onChange={set('model')}><option value="">Select…</option>{models.map((x) => <option key={x}>{x}</option>)}</select></div>
+          <div className="field"><label>Pitch video link</label><input type="url" className="input" value={f.pitchVideo} onChange={set('pitchVideo')} placeholder="https://youtube.com/…" /></div>
+          <div className="field span-2"><label>Market</label><textarea className="textarea" value={f.market || ''} onChange={set('market')} /></div>
+        </div>
+
+        <h3 className="mt-8" style={{ fontSize: 18 }}>Traction</h3>
+        <div className="stack mt-3" style={{ gap: 10 }}>
+          {metrics.map((m, i) => (
+            <div key={i} className="row" style={{ gap: 10 }}>
+              <input className="input grow" value={m.k} placeholder="Metric, e.g. Users" onChange={(e) => setMetrics((p) => p.map((x, j) => (j === i ? { ...x, k: e.target.value } : x)))} />
+              <input className="input grow" value={m.v} placeholder="Value, e.g. 1,200" onChange={(e) => setMetrics((p) => p.map((x, j) => (j === i ? { ...x, v: e.target.value } : x)))} />
+              <button type="button" className="icon-btn" aria-label="Remove metric" onClick={() => setMetrics((p) => p.filter((_, j) => j !== i))}><X size={16} /></button>
+            </div>
+          ))}
+          {metrics.length < 4 && <div><button type="button" className="btn btn-soft btn-sm" onClick={() => setMetrics((p) => [...p, { k: '', v: '' }])}><Plus size={14} /> Add metric</button></div>}
+          <div className="field"><label>Milestones</label><textarea className="textarea" value={f.tractionNotes} onChange={set('tractionNotes')} placeholder="Pilots, partnerships, awards, waitlist" /></div>
+        </div>
+
+        <h3 className="mt-8" style={{ fontSize: 18 }}>Executive team</h3>
+        <div className="stack mt-3">
+          {founders.map((x, i) => (
+            <div key={i} className="card card-pad">
+              <div className="row-between"><b className="small">Executive {i + 1}</b>{founders.length > 1 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFounders((p) => p.filter((_, j) => j !== i))}><X size={14} /> Remove</button>}</div>
+              <div className="grid-2 mt-3">
+                <div className="field"><label>Full name</label><input className="input" value={x.name} onChange={(e) => setFounder(i, 'name', e.target.value)} /></div>
+                <div className="field"><label>Role</label><input className="input" value={x.role} onChange={(e) => setFounder(i, 'role', e.target.value)} /></div>
+                <div className="field span-2"><label>LinkedIn</label><input type="url" className="input" value={x.linkedin || ''} onChange={(e) => setFounder(i, 'linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></div>
+                <div className="field span-2"><label>Short bio</label><textarea className="textarea" value={x.bg || ''} onChange={(e) => setFounder(i, 'bg', e.target.value)} /></div>
+              </div>
+            </div>
+          ))}
+          {founders.length < 4 && <div><button type="button" className="btn btn-soft btn-sm" onClick={() => setFounders((p) => [...p, { name: '', role: '', bg: '', linkedin: '' }])}><Plus size={14} /> Add executive</button></div>}
+        </div>
+
+        <h3 className="mt-8" style={{ fontSize: 18 }}>Use of funds</h3>
+        <div className="stack mt-3" style={{ gap: 10 }}>
+          {funds.map((r, i) => (
+            <div key={i} className="row" style={{ gap: 10 }}>
+              <input className="input grow" value={r.label} placeholder="e.g. Product development" onChange={(e) => setFunds((p) => p.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+              <input className="input" style={{ width: 100 }} type="number" min="1" max="100" value={r.pct} placeholder="%" onChange={(e) => setFunds((p) => p.map((x, j) => (j === i ? { ...x, pct: e.target.value } : x)))} />
+              <button type="button" className="icon-btn" aria-label="Remove row" disabled={funds.length === 1} onClick={() => setFunds((p) => p.filter((_, j) => j !== i))}><X size={16} /></button>
+            </div>
+          ))}
+          <div className="row-between">
+            <button type="button" className="btn btn-soft btn-sm" onClick={() => setFunds((p) => [...p, { label: '', pct: '' }])}><Plus size={14} /> Add row</button>
+            <span className="small" style={{ color: total === 100 ? 'var(--green)' : 'var(--muted)' }}>Total: <b>{total}%</b></span>
+          </div>
+        </div>
+
+        <div className="row mt-8" style={{ justifyContent: 'flex-end' }}><button className="btn btn-dark" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save listing'}</button></div>
       </div>
     </div>
   )

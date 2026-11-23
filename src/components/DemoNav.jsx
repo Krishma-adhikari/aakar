@@ -15,10 +15,10 @@ const ACCOUNTS = {
 
 const PAGES = {
   public: [['/', 'Landing page'], ['/register', 'Choose role'], ['/register/investor', 'Register: investor'], ['/register/startup', 'Register: startup'], ['/register/student', 'Register: student'], ['/register/professional', 'Register: professional'], ['/login', 'Login']],
-  investor: [['/app/startups', 'Discover startups'], ['/app/startups/s1', 'Startup detail'], ['/app/saved', 'Saved'], ['/app/messages', 'Messages'], ['/app/helpdesk', 'Tech Help Desk'], ['/app/profile', 'Profile & visibility']],
-  startup: [['/app', 'Dashboard'], ['/app/investors', 'Investors'], ['/app/messages', 'Messages'], ['/app/helpdesk', 'Tech Help Desk'], ['/app/profile', 'My listing']],
+  investor: [['/app/startups', 'Discover startups'], ['/app/startups/s1', 'Startup detail'], ['/app/saved', 'Saved'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile & visibility']],
+  startup: [['/app', 'Dashboard'], ['/app/investors', 'Investors'], ['/app/messages', 'Messages'], ['/app/profile', 'My listing']],
   student: [['/app', 'Home'], ['/app/sessions', 'Sessions'], ['/app/mentors', 'Find mentors'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile']],
-  professional: [['/app', 'Home & requests'], ['/app/sessions', 'My sessions'], ['/app/students', 'Students'], ['/app/helpdesk', 'Tech Help Desk'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile']],
+  professional: [['/app', 'Home & requests'], ['/app/sessions', 'My sessions'], ['/app/students', 'Students'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile']],
   admin: [['/admin', 'Verification queue']],
 }
 
@@ -118,7 +118,7 @@ export default function DemoNav() {
               <>
                 <div className="xs faint bold mt-4">PUBLIC PAGES</div>
                 <div className="row wrap mt-2" style={{ gap: 6 }}>
-                  {[PAGES.public[0], PAGES.public[1], PAGES.public[7]].map(([to, label]) => <button key={to} className="chip chip-btn" onClick={() => nav(to)}>{label}</button>)}
+                  {[PAGES.public[0], PAGES.public[1], PAGES.public[6]].map(([to, label]) => <button key={to} className="chip chip-btn" onClick={() => nav(to)}>{label}</button>)}
                   <button className="chip chip-btn" onClick={() => { setCurrent('u-p1'); nav('/pending') }}>Pending status page</button>
                 </div>
               </>

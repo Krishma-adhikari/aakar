@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowRight, ArrowUpRight, BadgeCheck, Bell, CalendarDays, CheckCircle2, FileCheck2, Globe2, Lightbulb, MapPin,
-  MessageCircle, Play, Quote, Rocket, Send, ShieldCheck, Sparkles, Star, UserPlus, Users, Wrench, TrendingUp, GraduationCap,
+  ArrowRight, ArrowUpRight, BadgeCheck, Bell, CalendarDays, CheckCircle2, FileCheck2, Globe2, MapPin,
+  MessageCircle, Play, Quote, Rocket, Send, ShieldCheck, Sparkles, Star, UserPlus, Users, TrendingUp, GraduationCap,
   Menu, X,
 } from 'lucide-react'
 import { Avatar, Logo, Pagoda, ROLES, Skyline, Stupa, ThemeToggle, money, nptParts } from '../components/ui'
@@ -206,10 +206,6 @@ const pillars = [
   { n: '01', icon: Rocket, grad: 'linear-gradient(135deg,#3a6cf0,#1d47c8)', shade: 'rgba(33,82,217,.7)', color: 'var(--primary)', title: 'Invest in Nepal', text: 'Startups publish their full profile, pitch and funding ask. Diaspora investors browse, save and start a conversation with founders in one click.', pts: ['Full pitch, traction and use of funds', 'Direct chat between investor and founder', 'Investors stay private unless they choose to be visible'] },
 
   { n: '02', icon: Users, grad: 'linear-gradient(135deg,#8b6cf5,#5b3ad6)', shade: 'rgba(109,74,230,.7)', color: 'var(--violet)', title: 'Mentor the next generation', text: 'Students find the right mentor through keyword matching and get guidance on studies, jobs and scholarships from Nepalis abroad.', pts: ['Find mentors by field, country or interest', 'One-to-one mentorship on request', 'Group sessions notify every interested student'] },
-  { n: '03', icon: Wrench, grad: 'linear-gradient(135deg,#22b8d8,#0a7f9c)', shade: 'rgba(8,145,178,.7)', color: 'var(--teal)', title: 'Tech Help Desk', text: 'NGOs, schools and startups post the technical problems they face. Engineers anywhere in the world reply with solutions over chat.', pts: ['Post a challenge in minutes', 'Experts send solutions directly', 'Turn advice into ongoing support'] },
-
-  { n: '02', icon: Users, grad: 'linear-gradient(135deg,#8b6cf5,#5b3ad6)', shade: 'rgba(109,74,230,.7)', color: 'var(--violet)', title: 'Mentor the next generation', text: 'Nepali professionals abroad volunteer to guide students on higher studies, jobs and global opportunities, matched by field and interests.', pts: ['Keyword matching between students and mentors', 'One-to-one mentorship on request', 'Group sessions notify every interested student'] },
-  { n: '03', icon: Wrench, grad: 'linear-gradient(135deg,#22b8d8,#0a7f9c)', shade: 'rgba(8,145,178,.7)', color: 'var(--teal)', title: 'Tech Help Desk', text: 'Startups post the technical problems they face. Engineers anywhere in the world reply with solutions over chat.', pts: ['Post a challenge in minutes', 'Experts send solutions directly', 'Turn advice into ongoing support'] },
 
 ]
 
@@ -221,7 +217,7 @@ const steps = [
 ]
 
 // Made-up stats and testimonials. Shown in demo mode only, never to real visitors.
-const demoStats = [[TrendingUp, '120+', 'Verified Nepali startups'], [Globe2, '$4.8M', 'Funding requested on Aakar'], [GraduationCap, '2,100+', 'Students mentored'], [Lightbulb, '85', 'Tech challenges solved']]
+const demoStats = [[TrendingUp, '120+', 'Verified Nepali startups'], [Globe2, '$4.8M', 'Funding requested on Aakar'], [GraduationCap, '2,100+', 'Students mentored']]
 const demoStories = [
   { quote: 'I left Nepal 9 years ago with no one to ask about grad school. On Aakar I spend one evening a month and help 60 students at once.', who: demoMentors[0], role: `${demoMentors[0].title}, ${demoMentors[0].company}`, feature: true },
   { quote: 'Two diaspora angels found us on Aakar in our first week. That chat turned into $140k for our seed round.', who: { initials: 'AT', color: '#0f9f6e', name: 'Anisha Thapa' }, role: 'Founder, Krishi Sathi' },
@@ -277,13 +273,11 @@ export default function Landing() {
                 <svg viewBox="0 0 200 20" preserveAspectRatio="none" aria-hidden="true"><path d="M3 14 C 50 4, 120 2, 197 9" stroke="var(--primary)" strokeWidth="5" strokeLinecap="round" fill="none" /></svg>
               </span>
             </h1>
-            <p className="hero-lede">Aakar brings the Nepali diaspora and Nepal together on one trusted platform. Fund startups, mentor students and solve local tech problems from wherever you live.</p>
+            <p className="hero-lede">Aakar brings the Nepali diaspora and Nepal together on one trusted platform. Fund startups and mentor students from wherever you live.</p>
             <div className="stack" style={{ gap: 12, marginTop: 24, maxWidth: 520 }}>
               {[
                 [Rocket, 'Invest in Nepal', 'Back verified startups and chat with founders.'],
-                [Users, 'Mentor students', 'Host sessions and guide students on studies, jobs and scholarships.'],
-                [Wrench, 'Solve challenges', 'Help schools, NGOs and startups fix real problems.'],
-              ].map(([I, t, d]) => (
+                [Users, 'Mentor students', 'Host sessions and guide students on studies, jobs and scholarships.'],              ].map(([I, t, d]) => (
                 <div key={t} className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
                   <span className="ic-tile" style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--primary-50)', color: 'var(--primary)' }}><I size={18} /></span>
                   <div className="small" style={{ paddingTop: 7 }}><b>{t}</b> <span className="muted">· {d}</span></div>
@@ -322,8 +316,8 @@ export default function Landing() {
         <div className="container">
           <div className="section-head center">
             <span className="eyebrow">What you can do</span>
-            <h2>Three ways the diaspora <span>builds Nepal</span>, together.</h2>
-            <p>Money, mentorship and know-how: the three things Nepalis abroad most want to give back, now in one place.</p>
+            <h2>Two ways the diaspora <span>builds Nepal</span>, together.</h2>
+            <p>Money and mentorship: the two things Nepalis abroad most want to give back, now in one place.</p>
           </div>
           <div className="pillars">
             {pillars.map((p) => (
@@ -337,17 +331,8 @@ export default function Landing() {
                 {DEMO_ENABLED && (
                   <div className="pillar-preview" style={{ marginTop: 'auto' }}>
                     {p.n === '01' && <div className="row small"><Avatar p={demoStartups[3]} size="sm" square /><div className="grow"><b>{demoStartups[3].name}</b><div className="xs muted">Raising {money(demoStartups[3].ask)} · {demoStartups[3].stage}</div></div><span className="btn btn-primary btn-sm"><MessageCircle size={14} /> Chat</span></div>}
-                    {p.n === '02' && <div className="row small"><Avatar p={demoMentors[1]} size="sm" /><div className="grow"><b>{demoMentors[1].name}</b><div className="xs muted">Matched on <span style={{ color: 'var(--violet)', fontWeight: 700 }}>Scholarships · Study in UK</span></div></div></div>}
-                    {p.n === '03' && <div className="row small"><span className="avatar sm sq" style={{ backgroundColor: '#0891b2' }}><Lightbulb size={15} /></span><div className="grow"><b>School lab PCs too slow</b><div className="xs muted">2 solutions suggested · Sindhupalchok</div></div></div>}
-                  </div>
+                    {p.n === '02' && <div className="row small"><Avatar p={demoMentors[1]} size="sm" /><div className="grow"><b>{demoMentors[1].name}</b><div className="xs muted">Matched on <span style={{ color: 'var(--violet)', fontWeight: 700 }}>Scholarships · Study in UK</span></div></div></div>}                  </div>
                 )}
-                
-                <div className="pillar-preview" style={{ marginTop: 'auto' }}>
-                  {p.n === '01' && <div className="row small"><Avatar p={startups[3]} size="sm" square /><div className="grow"><b>{startups[3].name}</b><div className="xs muted">Asking {money(startups[3].ask)} · {startups[3].stage}</div></div><span className="btn btn-primary btn-sm"><MessageCircle size={14} /> Chat</span></div>}
-                  {p.n === '02' && <div className="row small"><Avatar p={mentors[1]} size="sm" /><div className="grow"><b>{mentors[1].name}</b><div className="xs muted">Matched on <span style={{ color: 'var(--violet)', fontWeight: 700 }}>Scholarships · Study in UK</span></div></div></div>}
-                  {p.n === '03' && <div className="row small"><span className="avatar sm sq" style={{ backgroundColor: '#0891b2' }}><Lightbulb size={15} /></span><div className="grow"><b>Booking site slow in Europe</b><div className="xs muted">2 solutions suggested · Kathmandu</div></div></div>}
-                </div>
-
               </div>
             ))}
           </div>
@@ -508,7 +493,7 @@ export default function Landing() {
               <Logo />
               <p className="muted small mt-3" style={{ maxWidth: 320 }}>आकार means “shape”. We’re a community shaping Nepal’s future, from Kathmandu to every corner of the world.</p>
             </div>
-            <div><h5>Platform</h5><ul><li><a href="#startups">Startups</a></li><li><a href="#features">Mentorship</a></li><li><a href="#features">Tech Help Desk</a></li></ul></div>
+            <div><h5>Platform</h5><ul><li><a href="#startups">Startups</a></li><li><a href="#features">Mentorship</a></li></ul></div>
             <div><h5>Join as</h5><ul>{Object.entries(ROLES).slice(0, 4).map(([k, r]) => <li key={k}><Link to={`/register/${k}`}>{r.label}</Link></li>)}</ul></div>
             <div><h5>Aakar</h5><ul><li><a href="#how">Trust &amp; verification</a></li>{showStories && <li><a href="#stories">Success stories</a></li>}<li><Link to="/login">Log in</Link></li></ul></div>
           </div>

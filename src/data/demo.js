@@ -10,6 +10,7 @@ export const KEYWORDS = [
 
 export const SECTORS = ['Agritech', 'Fintech', 'Healthtech', 'Edtech', 'Clean Energy', 'Tourism', 'E-commerce', 'Food & Beverage']
 export const STAGES = ['Idea', 'Pre-seed', 'Seed', 'Series A']
+export const BUSINESS_MODELS = ['B2B', 'B2C', 'B2B2C', 'Marketplace', 'SaaS / subscription', 'Freemium', 'Commission / transaction fee', 'Product sales', 'Other']
 
 export const COLORS = ['#e11d48', '#2152d9', '#0f9f6e', '#e8961e', '#6d4ae6', '#0891b2', '#d9542b', '#334155']
 

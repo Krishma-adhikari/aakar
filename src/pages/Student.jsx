@@ -159,6 +159,7 @@ export function StudentHome() {
   const recSessions = recommendSessions(entity, upcoming, state.mentors, { minRelevance: 0.1 })
   const matches = recommendMentors(entity, state.mentors, { minRelevance: 0.1 }).map((r) => ({ m: r.item, common: r.reasons }))
   const myReqs = state.requests.filter((r) => r.studentId === entity.id)
+  const [openMentor, setOpenMentor] = useState(null)
 
   // toggleRegister returns false when it failed (it already showed the error), so only celebrate real successes.
   const toggle = async (id) => {
@@ -194,8 +195,9 @@ export function StudentHome() {
 
           <div className="row-between mt-8"><h3 style={{ fontSize: 22 }}>Mentors matched to you</h3><Link to="/app/mentors" className="small link">See all</Link></div>
           <div className="grid-2 mt-4">
-            {matches.slice(0, 4).map(({ m, common }) => <MentorMini key={m.id} m={m} common={common} />)}
+            {matches.slice(0, 4).map(({ m, common }) => <MentorMini key={m.id} m={m} common={common} onOpen={(x) => setOpenMentor({ m: x, common })} />)}
           </div>
+          {openMentor && <MentorDetails m={openMentor.m} common={openMentor.common} onClose={() => setOpenMentor(null)} />}
         </div>
         <div className="stack">
           <div className="card card-pad">
@@ -224,12 +226,36 @@ export function StudentHome() {
   )
 }
 
-function MentorMini({ m, common }) {
+function MentorMini({ m, common, onOpen }) {
   return (
-    <Link to="/app/mentors" className="card card-hover" style={{ padding: 16, display: 'block' }}>
+    <button type="button" onClick={() => onOpen(m)} className="card card-hover" style={{ padding: 16, display: 'block', width: '100%', textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer' }}>
       <div className="row"><Avatar p={m} /><div className="grow"><div className="small bold">{m.name}</div><div className="xs muted">{m.title}, {m.company}</div></div></div>
       <div className="row wrap mt-3" style={{ gap: 6 }}>{common.map((c) => <span key={c} className="chip chip-match">{c}</span>)}</div>
-    </Link>
+    </button>
+  )
+}
+
+function MentorDetails({ m, common, onClose }) {
+  const hasRating = typeof m.rating === 'number' && m.rating > 0
+  return (
+    <Modal title={m.name} sub={`${m.title}, ${m.company}`} onClose={onClose} width={560}>
+      <div className="stack" style={{ gap: 14 }}>
+        <div className="row"><Avatar p={m} size="lg" /><div className="small muted">{m.location && <div className="row" style={{ gap: 4 }}><MapPin size={13} /> {m.location}</div>}{m.years ? <div>{m.years} years of experience</div> : null}{m.degree && <div>{m.degree}</div>}</div></div>
+        {m.bio && <p className="small" style={{ color: 'var(--ink-2)' }}>{m.bio}</p>}
+        <div>
+          <div className="xs faint bold">EXPERTISE</div>
+          <div className="row wrap mt-2" style={{ gap: 6 }}>{(m.fields || []).map((f) => <span key={f} className={`chip ${common.includes(f) ? 'chip-match' : ''}`}>{common.includes(f) && <Check size={12} />} {f}</span>)}</div>
+        </div>
+        <div className="row xs muted" style={{ gap: 14 }}>
+          {hasRating ? <span className="row" style={{ gap: 4 }}><Star size={13} color="var(--gold)" fill="var(--gold)" /> {m.rating}</span> : <span className="badge badge-amber">New</span>}
+          <span>{m.mentees} mentees</span><span>{m.hours} hrs/month</span>
+        </div>
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          <Link to="/app/mentors" className="btn btn-primary">Request mentorship <ArrowRight size={16} /></Link>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

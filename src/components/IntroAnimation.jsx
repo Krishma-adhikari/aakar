@@ -161,7 +161,7 @@ export default function IntroAnimation() {
             top: `${endY}px`,
             fontSize: `${endSize}px`,
             letterSpacing: `${spacingEm}em`,
-            paddingLeft: `${spacingEm}em`,
+            paddingLeft: `${Math.max(0, spacingEm)}em`,
             opacity: 0,
             offset: 1,
           },

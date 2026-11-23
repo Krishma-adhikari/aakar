@@ -12,7 +12,6 @@ const Landing = lazy(() => import('./pages/Landing'))
 const Admin = lazy(() => import('./pages/Admin'))
 const AppShell = lazy(() => import('./pages/AppShell'))
 const Messages = lazy(() => import('./pages/Messages'))
-const HelpDesk = lazy(() => import('./pages/HelpDesk'))
 
 const forgot = () => import('./pages/ForgotPassword')
 const ForgotPassword = named(forgot, 'ForgotPassword')
@@ -28,6 +27,7 @@ const RoleSelect = named(auth, 'RoleSelect')
 
 const investor = () => import('./pages/Investor')
 const Discover = named(investor, 'Discover')
+const InvestorHome = named(investor, 'InvestorHome')
 const InvestorProfile = named(investor, 'InvestorProfile')
 const Saved = named(investor, 'Saved')
 const StartupDetail = named(investor, 'StartupDetail')
@@ -104,11 +104,10 @@ export default function App() {
                 element={
                   <RoleRoute
                     fallback="/"
-                    investor={<Discover />}
+                    investor={<InvestorHome />}
                     startup={<StartupHome />}
                     student={<StudentHome />}
                     professional={<ProHome />}
-                    organization={<Navigate to="/app/helpdesk" replace />}
                   />
                 }
               />
@@ -122,7 +121,6 @@ export default function App() {
               />
               <Route path="mentors" element={<RoleRoute student={<Mentors />} />} />
               <Route path="students" element={<RoleRoute professional={<ProStudents />} />} />
-              <Route path="helpdesk" element={<HelpDesk />} />
               <Route path="messages" element={<Messages />} />
               <Route
                 path="profile"

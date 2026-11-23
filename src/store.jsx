@@ -325,6 +325,19 @@ function demoDeliver(s, me, other, text, srcId, intro) {
   return { ...s, conversations: [{ id: uid('cv'), ownerId: other.id, peer, messages: add }, ...s.conversations] }
 }
 
+// Map an edited startup listing back to the registration fields it is built from (profiles.details.raw).
+function listingToRaw(p) {
+  const out = {}
+  ;['tagline', 'sector', 'stage', 'location', 'founded', 'team', 'ask', 'equity', 'pitchVideo', 'tractionNotes', 'useOfFunds'].forEach((k) => { if (p[k] !== undefined) out[k] = p[k] })
+  if (p.pitch) {
+    out.problem = p.pitch.problem; out.problemLine = p.pitch.problem
+    out.solution = p.pitch.solution; out.market = p.pitch.market; out.model = p.pitch.model
+  }
+  if (p.founders) out.execs = p.founders.map((f) => ({ name: f.name, role: f.role, bio: f.bg || '', linkedin: f.linkedin || '' }))
+  if (p.traction) out.tractionMetrics = p.traction
+  return out
+}
+
 // Turn an approved registration into a platform record (startup listing, mentor profile, ...)
 function buildEntity(user) {
   const r = user.raw || {}
@@ -333,13 +346,13 @@ function buildEntity(user) {
     case 'investor':
       return ['investors', { ...base, type: r.investorType || 'Angel investor', firm: r.firm || 'Independent', location: r.country || user.profile?.Country || 'Abroad', ticket: r.ticket || user.profile?.['Ticket size'] || '—', sectors: r.sectors || [], bio: r.bio || '', visible: !!r.visible, deals: 0 }]
     case 'student':
-      return ['students', { ...base, institution: r.institution || user.profile?.Institution || '', level: r.level || user.profile?.Level || '', city: r.city || user.profile?.City || '', interests: r.interests || (user.profile?.Interests || '').split(',').map((s) => s.trim()).filter(Boolean), goal: r.goal || '' }]
+      return ['students', { ...base, institution: r.institution || user.profile?.Institution || '', level: r.level || user.profile?.Level || '', city: r.city || user.profile?.City || '', interests: r.interests || (user.profile?.Interests || '').split(',').map((s) => s.trim()).filter(Boolean), goal: r.goal || '', gapYear: r.gapYear === 'Yes' ? (r.gapYearWhen || 'Yes') : '' }]
     case 'professional':
       return ['mentors', { ...base, title: r.title || user.profile?.Title || '', company: r.company || user.profile?.Company || '', location: r.country || user.profile?.Country || '', years: Number(r.years) || 5, fields: r.fields || (user.profile?.Expertise || '').split(',').map((s) => s.trim()).filter(Boolean), degree: r.degree || '', bio: r.bio || '', rating:null, mentees: 0, hours: parseInt(r.hours, 10) || 4 }]
     case 'startup': {
       const name = r.startupName || user.profile?.['Startup name'] || user.name
       const ask = Number(String(r.ask || user.profile?.['Funding ask'] || '50000').replace(/[^\d]/g, '')) || 50000
-      return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: [{ name: user.name, role: 'Founder', bg: '' }], traction: [{ k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }], tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
+      return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: r.execs?.length ? r.execs.map((m) => ({ name: m.name, role: m.role, bg: m.bio, linkedin: m.linkedin })) : [{ name: user.name, role: 'Founder', bg: '' }], pitchVideo: r.pitchVideo || '', traction: Array.isArray(r.tractionMetrics) ? r.tractionMetrics : [...(r.tractionUsers ? [{ k: 'Users', v: String(r.tractionUsers) }] : []), ...(r.tractionRevenue ? [{ k: 'Revenue / mo', v: '$' + String(r.tractionRevenue).replace(/^\$/, '') }] : []), { k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }].slice(0, 4), tractionNotes: r.tractionNotes || '', tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: r.useOfFunds?.length ? r.useOfFunds : [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
     }
 
 
@@ -952,8 +965,21 @@ const safety = setTimeout(done, 3000)
       return {}
     },
 
-    updateEntity(listKey, id, patch) {
-      setState((s) => ({ ...s, [listKey]: s[listKey].map((x) => (x.id === id ? { ...x, ...patch } : x)) }))
+    // Startup listings of real members are saved to Supabase first (update_my_listing), then shown.
+    // Everything else, and sample/demo records, stays in local state. Returns false if saving failed.
+    async updateEntity(listKey, id, patch) {
+      const ent = listKey === 'startups' ? state.startups.find((x) => x.id === id) : null
+      const raw = ent?.userId ? listingToRaw(patch) : null
+      if (raw) {
+        const { error } = await supabase.rpc('update_my_listing', { p_raw: raw })
+        if (error) { console.error('update_my_listing failed:', error.message); toast('Could not save your listing. Please try again.'); return false }
+      }
+      setState((s) => ({
+        ...s,
+        [listKey]: s[listKey].map((x) => (x.id === id ? { ...x, ...patch } : x)),
+        users: raw ? s.users.map((u) => (u.id === ent.userId ? { ...u, raw: { ...u.raw, ...raw } } : u)) : s.users,
+      }))
+      return true
     },
 
     // Save / unsave a startup on my watchlist.
@@ -1489,12 +1515,6 @@ export function useNotifications() {
           out.push({ id: `n-reg-${se.id}-${sid}`, icon: 'user', text: `${st.name} registered for your session`, sub: se.title, to: '/app/sessions', at: nowISO() })
         })
       })
-    }
-
-    if (user.role === 'startup') {
-      state.challenges.filter((c) => c.posterId === entity.id).forEach((c) => c.responses.forEach((r, i) => {
-        out.push({ id: `n-${c.id}-${i}`, icon: 'bulb', text: `${r.name} suggested a solution`, sub: c.title, to: '/app/helpdesk', at: r.at })
-      }))
     }
 
     if (user.role === 'investor') {

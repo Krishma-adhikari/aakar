@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bell, CalendarDays, CalendarPlus, Check, GraduationCap, Heart, MapPin, MessageCircle, Plus, Sparkles, Star, Users, X } from 'lucide-react'
+import { Bell, CalendarDays, CalendarPlus, Check, ExternalLink, FileText, GraduationCap, Heart, MapPin, MessageCircle, Plus, Star, Users, X } from 'lucide-react'
 import { Avatar, Empty, Modal, ago, fmtNPT, sessionWhen } from '../components/ui'
 import { KEYWORDS } from '../data/demo'
 import { useStore, validateMeetingLink } from '../store'
@@ -25,17 +25,44 @@ const clickable = (onOpen) => ({
   onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } },
 })
 
-function StudentDetails({ st, common = [], onClose }) {
+function StudentDetails({ st, common = [], req, onClose, actions }) {
+  const { docUrl } = useStore()
+  const [opening, setOpening] = useState(false)
+  const openCv = async () => {
+    setOpening(true)
+    const url = await docUrl(st.cv.path) // shows its own error toast on failure
+    setOpening(false)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
+  const safeLink = /^https?:\/\//i.test(st.portfolio || '') ? st.portfolio : null
   return (
-    <Modal title={st.name} sub={[st.level, st.institution].filter(Boolean).join(' · ')} onClose={onClose} width={560}>
-      <div className="stack" style={{ gap: 14 }}>
+    <Modal title={st.name} sub={[st.level, st.institution].filter(Boolean).join(' · ')} onClose={onClose} width={600}>
+      <div className="stack" style={{ gap: 16 }}>
         <div className="row"><Avatar p={st} size="lg" /><div className="small muted">{st.city && <div className="row" style={{ gap: 4 }}><MapPin size={13} /> {st.city}</div>}{st.gapYear && <div>Gap year: {st.gapYear}</div>}</div></div>
-        {st.goal && <div><div className="xs faint bold">GOAL</div><p className="small mt-2" style={{ color: 'var(--ink-2)' }}>{st.goal}</p></div>}
+        {req && <div><div className="xs faint bold">THEIR MESSAGE TO YOU · {ago(req.at).toUpperCase()}</div><p className="small mt-2" style={{ background: 'var(--paper)', padding: 12, borderRadius: 12, color: 'var(--ink-2)' }}>“{req.message}”</p></div>}
+        <div><div className="xs faint bold">GOAL</div><p className="small mt-2" style={{ color: 'var(--ink-2)' }}>{st.goal || 'Not shared yet.'}</p></div>
         <div>
           <div className="xs faint bold">INTERESTS</div>
           <div className="row wrap mt-2" style={{ gap: 6 }}>{(st.interests || []).map((i) => <span key={i} className={`chip ${common.includes(i) ? 'chip-match' : ''}`}>{common.includes(i) && <Check size={12} />} {i}</span>)}</div>
         </div>
-        <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn btn-ghost" onClick={onClose}>Close</button></div>
+        <div className="grid-2" style={{ gap: 12 }}>
+          <div className="card card-pad">
+            <div className="xs faint bold">CV / RÉSUMÉ</div>
+            {st.cv?.path
+              ? <button className="btn btn-soft btn-sm mt-2" onClick={openCv} disabled={opening}><FileText size={14} /> {opening ? 'Opening…' : 'View CV'}</button>
+              : <p className="small muted mt-2">Not uploaded.</p>}
+          </div>
+          <div className="card card-pad">
+            <div className="xs faint bold">PORTFOLIO</div>
+            {safeLink
+              ? <a className="btn btn-soft btn-sm mt-2" href={safeLink} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Open portfolio</a>
+              : <p className="small muted mt-2">Not shared.</p>}
+          </div>
+        </div>
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          {actions}
+        </div>
       </div>
     </Modal>
   )
@@ -344,30 +371,66 @@ export function ProSessions() {
   )
 }
 
-export function ProStudents() {
-  const { state, entity } = useStore()
-  const [openStudent, setOpenStudent] = useState(null)
-  const list = recommendStudents(entity, state.students, { minRelevance: 0.1 }).map((r) => ({ s: r.item, common: overlap(r.item.interests, entity.fields), reasons: r.reasons, relevance: r.relevance }))
+export function ProRequests() {
+  const { state, entity, respondRequest, startChat, toast } = useStore()
+  const nav = useNavigate()
+  const [tab, setTab] = useState('pending')
+  const [openId, setOpenId] = useState(null)
+  const reqs = state.requests.filter((r) => r.mentorId === entity.id).sort((a, b) => new Date(b.at) - new Date(a.at))
+  const count = (k) => reqs.filter((r) => r.status === k).length
+  const list = tab === 'all' ? reqs : reqs.filter((r) => r.status === tab)
+  const openReq = reqs.find((r) => r.id === openId)
+  const openStudent = openReq && state.students.find((s) => s.id === openReq.studentId)
+  const badge = (s) => (s === 'accepted' ? 'badge-green' : s === 'declined' ? 'badge-red' : 'badge-amber')
+  const chat = (st) => nav('/app/messages?c=' + startChat({ name: st.name, initials: st.initials, color: st.color, subtitle: `Mentee · ${st.institution}`, kind: 'student', refId: st.id, userId: st.userId }))
+  const tabs = [['pending', 'Pending'], ['accepted', 'Accepted'], ['declined', 'Declined'], ['all', 'All']]
+
   return (
     <div className="page">
-      <div className="page-head"><div><h1>Students matched to you</h1><p>Based on your expertise: {entity.fields.join(', ')}.</p></div></div>
+      <div className="page-head"><div><h1>Mentorship requests</h1><p>Students who asked you for guidance. Open a request to see their full profile.</p></div></div>
+      <div className="filters">
+        {tabs.map(([k, l]) => <button key={k} className={`chip chip-btn ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{l}{k !== 'all' ? ` (${count(k)})` : ` (${reqs.length})`}</button>)}
+      </div>
       {list.length ? (
         <div className="startup-grid">
-          {list.map(({ s, common, reasons, relevance }) => (
-            <div key={s.id} className="card card-pad card-hover stack" {...clickable(() => setOpenStudent({ st: s, common }))} style={{ gap: 12, cursor: 'pointer' }}>
-              <div className="row" style={{ alignItems: 'flex-start' }}>
-                <Avatar p={s} size="lg" />
-                <div className="grow"><div className="bold">{s.name}</div><div className="small muted">{s.level}</div><div className="xs muted">{s.institution} · {s.city}</div></div>
-                <div style={{ textAlign: 'center' }}><div className="serif" style={{ fontSize: 22, fontWeight: 600, color: 'var(--amber)' }}>{Math.round(relevance * 100)}%</div><div className="xs faint">match</div></div>
+          {list.map((r) => {
+            const st = state.students.find((s) => s.id === r.studentId)
+            if (!st) return null
+            const common = overlap(st.interests, entity.fields)
+            return (
+              <div key={r.id} className="card card-pad card-hover stack" {...clickable(() => setOpenId(r.id))} style={{ gap: 12, cursor: 'pointer' }}>
+                <div className="row" style={{ alignItems: 'flex-start' }}>
+                  <Avatar p={st} size="lg" />
+                  <div className="grow"><div className="bold">{st.name}</div><div className="small muted">{st.level}</div><div className="xs muted">{st.institution}{st.city ? ` · ${st.city}` : ''}</div></div>
+                  <span className={`badge ${badge(r.status)}`}>{r.status}</span>
+                </div>
+                <p className="small" style={{ background: 'var(--paper)', padding: 12, borderRadius: 12, color: 'var(--ink-2)' }}>“{r.message}”</p>
+                {st.goal && <p className="small" style={{ color: 'var(--ink-2)' }}><b>Goal:</b> {st.goal}</p>}
+                <div className="row-between">
+                  <div className="row wrap" style={{ gap: 6 }}>{(st.interests || []).slice(0, 4).map((i) => <span key={i} className={`chip ${common.includes(i) ? 'chip-match' : ''}`}>{i}</span>)}</div>
+                  <span className="xs faint" style={{ whiteSpace: 'nowrap' }}>{ago(r.at)}</span>
+                </div>
               </div>
-              {s.goal && <p className="small" style={{ color: 'var(--ink-2)' }}><b>Goal:</b> {s.goal}</p>}
-              {reasons.length > 0 && <div className="xs muted row" style={{ gap: 4 }}><Sparkles size={11} /> Why this student: {reasons.join(', ')}</div>}
-              <div className="row wrap" style={{ gap: 6 }}>{s.interests.map((i) => <span key={i} className={`chip ${common.includes(i) ? 'chip-match' : ''}`}>{i}</span>)}</div>
-            </div>
-          ))}
+            )
+          })}
         </div>
-      ) : <Empty icon={GraduationCap} title="No matches yet" />}
-      {openStudent && <StudentDetails st={openStudent.st} common={openStudent.common} onClose={() => setOpenStudent(null)} />}
+      ) : <Empty icon={GraduationCap} title={tab === 'pending' ? 'No pending requests' : 'Nothing here'} text="When a student requests mentorship, it shows up here." />}
+      {openReq && openStudent && (
+        <StudentDetails
+          st={openStudent}
+          common={overlap(openStudent.interests, entity.fields)}
+          req={openReq}
+          onClose={() => setOpenId(null)}
+          actions={openReq.status === 'pending'
+            ? <>
+              <button className="btn btn-ghost" onClick={() => { respondRequest(openReq.id, 'declined'); toast('Request declined'); setOpenId(null) }}><X size={15} /> Decline</button>
+              <button className="btn btn-success" onClick={() => { respondRequest(openReq.id, 'accepted'); toast(`You’re now mentoring ${openStudent.name}. A chat has been opened.`); setOpenId(null) }}><Check size={15} /> Accept</button>
+            </>
+            : openReq.status === 'accepted'
+              ? <button className="btn btn-primary" onClick={() => chat(openStudent)}><MessageCircle size={15} /> Chat</button>
+              : null}
+        />
+      )}
     </div>
   )
 }

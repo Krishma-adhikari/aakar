@@ -4,7 +4,7 @@ import { Avatar, Logo, RoleBadge, ThemeToggle, ago } from '../components/ui'
 import SignOutButton from '../components/SignOutButton'
 import {
   Bell, Bookmark, CalendarDays, CheckCircle2, Compass, GraduationCap, Home, Landmark, Lightbulb, LogOut, MessageCircle,
-  Rocket, User, Users, Wallet,
+  Rocket, User, Users,
 } from 'lucide-react'
 import { useNotifications, useStore } from '../store'
 
@@ -28,14 +28,13 @@ const NAV = {
     ['/app', 'Home', Home],
     ['/app/sessions', 'Sessions', CalendarDays],
     ['/app/mentors', 'Find mentors', Users],
-    ['/app/paid-mentorship', 'Paid mentorship', Wallet], // NEW
     ['/app/messages', 'Messages', MessageCircle],
     ['/app/profile', 'My profile', User],
   ],
   professional: [
     ['/app', 'Home', Home],
     ['/app/sessions', 'My sessions', CalendarDays],
-    ['/app/students', 'Matched Students', GraduationCap],
+    ['/app/requests', 'Mentorship requests', GraduationCap],
     ['/app/messages', 'Messages', MessageCircle],
     ['/app/profile', 'My profile', User],
   ],

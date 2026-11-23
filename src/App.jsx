@@ -46,7 +46,7 @@ const StudentSessions = named(student, 'StudentSessions')
 const professional = () => import('./pages/Professional')
 const ProHome = named(professional, 'ProHome')
 const ProSessions = named(professional, 'ProSessions')
-const ProStudents = named(professional, 'ProStudents')
+const ProRequests = named(professional, 'ProRequests')
 
 
 function RoleRoute({ fallback = '/app', ...pages }) {
@@ -120,7 +120,8 @@ export default function App() {
                 element={<RoleRoute student={<StudentSessions />} professional={<ProSessions />} />}
               />
               <Route path="mentors" element={<RoleRoute student={<Mentors />} />} />
-              <Route path="students" element={<RoleRoute professional={<ProStudents />} />} />
+              <Route path="requests" element={<RoleRoute professional={<ProRequests />} />} />
+              <Route path="students" element={<Navigate to="/app/requests" replace />} />
               <Route path="messages" element={<Messages />} />
               <Route
                 path="profile"

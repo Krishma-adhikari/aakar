@@ -54,7 +54,10 @@ export function ThemeToggle() {
 
 export function Avatar({ p, size = '', square = false }) {
   if (!p) return null
-  return <span className={`avatar ${size} ${square ? 'sq' : ''}`} style={{ backgroundColor: p.color || 'var(--primary)' }}>{p.initials}</span>
+  const photo = /^https?:\/\//i.test(p.photo || '') ? p.photo : null
+  const style = { backgroundColor: p.color || 'var(--primary)' }
+  if (photo) Object.assign(style, { backgroundImage: `url("${photo}")`, backgroundSize: 'cover', backgroundPosition: 'center' })
+  return <span className={`avatar ${size} ${square ? 'sq' : ''}`} style={style} aria-label={photo ? p.name : undefined}>{photo ? null : p.initials}</span>
 }
 
 export function StatusBadge({ status }) {

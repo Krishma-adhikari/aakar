@@ -80,6 +80,12 @@ const FORMS = {
       { key: 'solution', label: 'Solution', type: 'textarea', span: 2, required: true, placeholder: 'What you built and how it solves the problem' },
       { key: 'model', label: 'Business model', type: 'select', options: BUSINESS_MODELS, required: true },
       { key: 'modelOther', label: 'Other business model (please specify)', required: true, showIf: (v) => v.model === 'Other' },
+      { key: 'productDesc', label: 'Your product or service', type: 'textarea', span: 2, required: true, placeholder: 'What it is, who uses it and how it works' },
+      { key: 'productWebsite', label: 'Product website or app link', type: 'url', span: 2, placeholder: 'https://…', hint: 'Website, app store page or live demo' },
+      { key: 'socialLinkedin', label: 'LinkedIn page', type: 'url', placeholder: 'https://linkedin.com/company/…' },
+      { key: 'socialFacebook', label: 'Facebook page', type: 'url', placeholder: 'https://facebook.com/…' },
+      { key: 'socialInstagram', label: 'Instagram', type: 'url', placeholder: 'https://instagram.com/…' },
+      { key: 'socialOther', label: 'Other link (X, YouTube, TikTok…)', type: 'url', placeholder: 'https://…' },
       { key: 'pitchVideo', label: 'Pitch video link', type: 'url', span: 2, placeholder: 'https://youtube.com/…', hint: 'YouTube, Vimeo, Loom or Google Drive link (public or unlisted)' },
       { key: 'tractionUsers', label: 'Users / customers so far', placeholder: 'e.g. 1,200' },
       { key: 'tractionRevenue', label: 'Monthly revenue (USD)', placeholder: 'e.g. 3,500, or 0 if pre-revenue' },
@@ -103,6 +109,7 @@ const FORMS = {
       { key: 'gapYearWhen', label: 'Which year was your gap year?', type: 'select', options: GAP_YEARS, required: true, showIf: (v) => v.gapYear === 'Yes' },
       { key: 'interests', label: 'Interests (used to match you with mentors and sessions)', type: 'chips', options: KEYWORDS, span: 2, required: true, max: 6, hint: 'Pick up to 6' },
       { key: 'goal', label: 'Your main goal', type: 'textarea', span: 2, placeholder: 'e.g. MS in Computer Science in the USA with a scholarship' },
+      { key: 'portfolio', label: 'Portfolio link (optional)', type: 'url', span: 2, placeholder: 'https://…', hint: 'GitHub, Behance, a personal site or a shared Drive folder. Mentors can see it.' },
     ],
     docs: [
       { key: 'sid', label: 'Student ID card', hint: 'Photo of the front of your ID', required: true },
@@ -125,6 +132,7 @@ const FORMS = {
       { key: 'id', label: 'Passport or ID', hint: 'To confirm you are Nepali or of Nepali origin', required: true },
       { key: 'emp', label: 'Proof of employment', hint: 'Employment letter, work ID or payslip (amounts hidden)', required: true },
       { key: 'cv', label: 'CV / résumé', hint: 'PDF, JPG or PNG', required: true },
+      { key: 'avatar', label: 'Profile photo (optional)', hint: 'Students will see it on your mentor profile (JPG or PNG)', accept: 'image' },
     ],
   },
 }
@@ -277,11 +285,12 @@ export function Register() {
     }
     if (step === 1) cfg.fields.filter((f) => !f.showIf || f.showIf(vals)).forEach((f) => {
       const v = vals[f.key]
+      if (f.type === 'url' && v && !/^https?:\/\/\S+$/i.test(String(v).trim())) e[f.key] = 'Enter a full link starting with https://'
       if (f.required && (v === undefined || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length))) e[f.key] = 'Required'
     })
     if (stepKey === 'Pitch') {
       visibleFields(cfg.pitch).forEach((f) => { if (f.required && !String(vals[f.key] ?? '').trim()) e[f.key] = 'Required' })
-      if (vals.pitchVideo && !/^https?:\/\/\S+$/i.test(vals.pitchVideo.trim())) e.pitchVideo = 'Enter a full link starting with https://'
+      visibleFields(cfg.pitch).forEach((f) => { if (f.type === 'url' && vals[f.key] && !/^https?:\/\/\S+$/i.test(String(vals[f.key]).trim())) e[f.key] = 'Enter a full link starting with https://' })
       execs.forEach((m, i) => {
         if (!m.name.trim() || !m.role.trim() || !m.bio.trim()) e['exec-' + i] = 'Name, role and bio are required'
         else if (!/^https?:\/\/([\w-]+\.)*linkedin\.com\/\S+/i.test(m.linkedin.trim())) e['exec-' + i] = 'Add a valid LinkedIn profile link (https://linkedin.com/in/…)'

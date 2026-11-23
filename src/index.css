@@ -468,6 +468,28 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .notif-dot { position: absolute; top: 7px; right: 8px; width: 9px; height: 9px; background: var(--crimson); border: 2px solid var(--card); border-radius: 99px; }
 
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.kpis.kpis-3 { grid-template-columns: repeat(3, 1fr); }
+.sh-hero { position: relative; overflow: hidden; border-radius: 28px; padding: 32px 36px; color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 28px; flex-wrap: wrap; background: radial-gradient(520px 260px at 100% 0%, rgba(255,255,255,.22), transparent 60%), radial-gradient(380px 220px at 0% 100%, rgba(255,255,255,.1), transparent 60%), linear-gradient(135deg, #1d47c8 0%, #5b3ad6 100%); box-shadow: var(--shadow-lg); }
+.sh-hero > * { position: relative; z-index: 1; }
+.sh-hero .ridge { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 110px; opacity: .13; z-index: 0; pointer-events: none; }
+.sh-id { display: flex; gap: 22px; align-items: center; min-width: 0; }
+.sh-hello { font-size: 14px; font-weight: 600; opacity: .85; }
+.sh-hero h1 { font-size: 34px; font-weight: 800; letter-spacing: -.035em; line-height: 1.1; margin-top: 2px; }
+.sh-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.sh-chips span { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.24); padding: 5px 12px; border-radius: 99px; font-size: 12.5px; font-weight: 600; }
+.sh-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.btn-ghost-light { background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.3); }
+.btn-ghost-light:hover { background: rgba(255,255,255,.24); }
+.sh-ring { position: relative; width: 112px; height: 112px; flex-shrink: 0; }
+.sh-ring-text { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.sh-ring-text b { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+.sh-ring-text span { font-size: 11px; opacity: .85; margin-top: 3px; }
+.check-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.check-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 14px; color: var(--muted); border-bottom: 1px solid var(--line-2); }
+.check-list li:last-child { border-bottom: 0; }
+.check-list li.ok { color: var(--ink-2); font-weight: 600; }
+.check-list .mark { width: 22px; height: 22px; border-radius: 99px; display: grid; place-items: center; background: var(--paper-2); color: var(--faint); flex-shrink: 0; }
+.check-list li.ok .mark { background: var(--green-50, #dcfce7); color: var(--green); }
 .kpi { padding: 20px 22px; position: relative; overflow: hidden; }
 .kpi .v { font-size: 30px; font-weight: 800; margin-top: 12px; letter-spacing: -.03em; }
 .kpi .ic { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; }
@@ -557,7 +579,7 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 /* ---------- Responsive ---------- */
 @media (max-width: 1080px) {
   .roles { grid-template-columns: repeat(2, 1fr); }
-  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .kpis, .kpis.kpis-3 { grid-template-columns: repeat(2, 1fr); }
   .detail-grid { grid-template-columns: 1fr; }
   .stories { grid-template-columns: 1fr; }
 }
@@ -586,7 +608,10 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
   .span-2 { grid-column: auto; }
   .steps { grid-template-columns: 1fr; }
   .section { padding: 72px 0; }
-  .kpis { grid-template-columns: 1fr 1fr; }
+  .kpis, .kpis.kpis-3 { grid-template-columns: 1fr 1fr; }
+  .sh-hero { padding: 24px 20px; }
+  .sh-hero h1 { font-size: 26px; }
+  .sh-id { flex-direction: column; align-items: flex-start; }
   .hero-visual { padding: 24px 16px; gap: 22px; border-radius: 26px; }
   .hero-card { width: min(var(--w, 320px), 92%); }
   .hero-grid { min-height: 0; padding-bottom: 40px; }

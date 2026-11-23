@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, Bell, CalendarDays, Check, Clock, ExternalLink, MapPin, MessageCircle, Sparkles, Star, Users, Video } from 'lucide-react'
+import { ArrowRight, Bell, CalendarDays, Check, Clock, ExternalLink, FileText, Link2, MapPin, MessageCircle, Sparkles, Star, Users, Video } from 'lucide-react'
 import { Avatar, Empty, Modal, fmtTime, nptParts } from '../components/ui'
 import { useStore, validateMeetingLink } from '../store'
 import { recommendMentors, recommendSessions } from '../lib/recommend'
@@ -235,6 +235,33 @@ function MentorMini({ m, common, onOpen }) {
   )
 }
 
+const safeUrl = (u) => (/^https?:\/\//i.test(u || '') ? u : null)
+
+// LinkedIn, portfolio and CV of a mentor, so students can get to know them.
+function MentorLinks({ m }) {
+  const { docUrl } = useStore()
+  const [opening, setOpening] = useState(false)
+  const openCv = async () => {
+    setOpening(true)
+    const url = await docUrl(m.cv.path)
+    setOpening(false)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
+  const linkedin = safeUrl(m.linkedin)
+  const portfolio = safeUrl(m.portfolio)
+  if (!linkedin && !portfolio && !m.cv?.path) return null
+  return (
+    <div>
+      <div className="xs faint bold">GET TO KNOW THEM</div>
+      <div className="row wrap mt-2" style={{ gap: 8 }}>
+        {linkedin && <a className="btn btn-soft btn-sm" href={linkedin} target="_blank" rel="noopener noreferrer"><Link2 size={14} /> LinkedIn</a>}
+        {portfolio && <a className="btn btn-soft btn-sm" href={portfolio} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Portfolio</a>}
+        {m.cv?.path && <button type="button" className="btn btn-soft btn-sm" onClick={openCv} disabled={opening}><FileText size={14} /> {opening ? 'Opening…' : 'View CV'}</button>}
+      </div>
+    </div>
+  )
+}
+
 function MentorDetails({ m, common, onClose }) {
   const hasRating = typeof m.rating === 'number' && m.rating > 0
   return (
@@ -246,6 +273,7 @@ function MentorDetails({ m, common, onClose }) {
           <div className="xs faint bold">EXPERTISE</div>
           <div className="row wrap mt-2" style={{ gap: 6 }}>{(m.fields || []).map((f) => <span key={f} className={`chip ${common.includes(f) ? 'chip-match' : ''}`}>{common.includes(f) && <Check size={12} />} {f}</span>)}</div>
         </div>
+        <MentorLinks m={m} />
         <div className="row xs muted" style={{ gap: 14 }}>
           {hasRating ? <span className="row" style={{ gap: 4 }}><Star size={13} color="var(--gold)" fill="var(--gold)" /> {m.rating}</span> : <span className="badge badge-amber">New</span>}
           <span>{m.mentees} mentees</span><span>{m.hours} hrs/month</span>
@@ -293,10 +321,11 @@ export function Mentors() {
   const nav = useNavigate()
   const [only, setOnly] = useState(true)
   const [asking, setAsking] = useState(null)
+  const [viewing, setViewing] = useState(null)
   const [msg, setMsg] = useState('')
   const list = recommendMentors(entity, state.mentors)
     .filter((r) => !only || r.relevance >= 0.1)
-    .map((r) => ({ m: r.item, common: overlap(r.item.fields, entity.interests), relevance: r.relevance, reasons: r.reasons }))
+    .map((r) => ({ m: r.item, common: overlap(r.item.fields, entity.interests), reasons: r.reasons }))
   const reqFor = (id) => state.requests.find((r) => r.mentorId === id && r.studentId === entity.id)
   const convFor = (id) => state.conversations.find((c) => c.ownerId === user.id && c.peer.refId === id && c.peer.kind === 'mentor')
 
@@ -308,10 +337,9 @@ export function Mentors() {
         <button className={`chip chip-btn ${!only ? 'active' : ''}`} onClick={() => setOnly(false)}>All mentors</button>
       </div>
       <div className="startup-grid">
-        {list.map(({ m, common, relevance, reasons }) => {
+        {list.map(({ m, common, reasons }) => {
           const req = reqFor(m.id)
           const conv = convFor(m.id)
-          const score = Math.round(relevance * 100)
           // New mentors have no rating yet: show "New" instead of an empty gold star.
           const hasRating = typeof m.rating === 'number' && m.rating > 0
           return (
@@ -319,11 +347,11 @@ export function Mentors() {
               <div className="row" style={{ alignItems: 'flex-start' }}>
                 <Avatar p={m} size="lg" />
                 <div className="grow"><div className="bold" style={{ fontSize: 16 }}>{m.name}</div><div className="small muted">{m.title} · {m.company}</div><div className="xs muted row mt-1" style={{ gap: 4 }}><MapPin size={11} /> {m.location}</div></div>
-                {relevance > 0.05 && <div style={{ textAlign: 'center' }}><div className="serif" style={{ fontSize: 22, fontWeight: 600, color: 'var(--amber)' }}>{score}%</div><div className="xs faint">match</div></div>}
               </div>
               <p className="small" style={{ color: 'var(--ink-2)' }}>{m.bio}</p>
               <div className="row wrap" style={{ gap: 6 }}>{m.fields.map((f) => <span key={f} className={`chip ${common.includes(f) ? 'chip-match' : ''}`}>{common.includes(f) && <Check size={12} />} {f}</span>)}</div>
               {reasons.length > 0 && <div className="xs muted row" style={{ gap: 4 }}><Sparkles size={11} /> Why this mentor: {reasons.join(', ')}</div>}
+              <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setViewing({ m, common })}>View full profile</button>
               <div className="row xs muted" style={{ gap: 14 }}>
                 {hasRating
                   ? <span className="row" style={{ gap: 4 }}><Star size={13} color="var(--gold)" fill="var(--gold)" /> {m.rating}</span>
@@ -340,6 +368,7 @@ export function Mentors() {
           )
         })}
       </div>
+      {viewing && <MentorDetails m={viewing.m} common={viewing.common} onClose={() => setViewing(null)} />}
       {asking && (
         <Modal title={`Request mentorship from ${asking.name}`} sub="Mentors are volunteers. A short, specific message gets the best response." onClose={() => setAsking(null)}>
           <textarea className="textarea" rows={5} value={msg} onChange={(e) => setMsg(e.target.value)} />

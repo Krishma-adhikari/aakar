@@ -114,6 +114,7 @@ const fromRow = (row, prev = {}) => ({
   raw: row.details?.raw,
   docs: row.details?.docs || [],
   files: row.details?.files || [],
+  avatar: row.details?.avatar || '',
   remote: true,
 })
 
@@ -333,8 +334,24 @@ function listingToRaw(p) {
     out.problem = p.pitch.problem; out.problemLine = p.pitch.problem
     out.solution = p.pitch.solution; out.market = p.pitch.market; out.model = p.pitch.model
   }
-  if (p.founders) out.execs = p.founders.map((f) => ({ name: f.name, role: f.role, bio: f.bg || '', linkedin: f.linkedin || '' }))
+  if (p.founders) out.execs = p.founders.map((f) => ({ name: f.name, role: f.role, bio: f.bg || '', linkedin: f.linkedin || '', photo: f.photo || '' }))
+  if (p.product) { out.productDesc = p.product.desc; out.productWebsite = p.product.website }
+  if (p.socials) { out.socialLinkedin = p.socials.linkedin; out.socialFacebook = p.socials.facebook; out.socialInstagram = p.socials.instagram; out.socialOther = p.socials.other }
   if (p.traction) out.tractionMetrics = p.traction
+  return out
+}
+
+// Same for a mentor's own profile (saved with update_my_profile).
+function mentorToRaw(p) {
+  const out = {}
+  ;['title', 'company', 'bio', 'fields', 'linkedin', 'portfolio'].forEach((k) => { if (p[k] !== undefined) out[k] = p[k] })
+  return out
+}
+
+// Same for a student's own profile (saved with update_my_profile).
+function studentToRaw(p) {
+  const out = {}
+  ;['institution', 'level', 'city', 'goal', 'interests', 'portfolio'].forEach((k) => { if (p[k] !== undefined) out[k] = p[k] })
   return out
 }
 
@@ -346,13 +363,13 @@ function buildEntity(user) {
     case 'investor':
       return ['investors', { ...base, type: r.investorType || 'Angel investor', firm: r.firm || 'Independent', location: r.country || user.profile?.Country || 'Abroad', ticket: r.ticket || user.profile?.['Ticket size'] || '—', sectors: r.sectors || [], bio: r.bio || '', visible: !!r.visible, deals: 0 }]
     case 'student':
-      return ['students', { ...base, institution: r.institution || user.profile?.Institution || '', level: r.level || user.profile?.Level || '', city: r.city || user.profile?.City || '', interests: r.interests || (user.profile?.Interests || '').split(',').map((s) => s.trim()).filter(Boolean), goal: r.goal || '', gapYear: r.gapYear === 'Yes' ? (r.gapYearWhen || 'Yes') : '' }]
+      return ['students', { ...base, institution: r.institution || user.profile?.Institution || '', level: r.level || user.profile?.Level || '', city: r.city || user.profile?.City || '', interests: r.interests || (user.profile?.Interests || '').split(',').map((s) => s.trim()).filter(Boolean), goal: r.goal || '', photo: user.avatar || '', portfolio: r.portfolio || '', cv: (user.files || []).find((f) => f.key === 'resume') || null, gapYear: r.gapYear === 'Yes' ? (r.gapYearWhen || 'Yes') : '' }]
     case 'professional':
-      return ['mentors', { ...base, title: r.title || user.profile?.Title || '', company: r.company || user.profile?.Company || '', location: r.country || user.profile?.Country || '', years: Number(r.years) || 5, fields: r.fields || (user.profile?.Expertise || '').split(',').map((s) => s.trim()).filter(Boolean), degree: r.degree || '', bio: r.bio || '', rating:null, mentees: 0, hours: parseInt(r.hours, 10) || 4 }]
+      return ['mentors', { ...base, title: r.title || user.profile?.Title || '', company: r.company || user.profile?.Company || '', location: r.country || user.profile?.Country || '', years: Number(r.years) || 5, fields: r.fields || (user.profile?.Expertise || '').split(',').map((s) => s.trim()).filter(Boolean), degree: r.degree || '', bio: r.bio || '', photo: user.avatar || '', linkedin: r.linkedin || user.profile?.['LinkedIn URL'] || '', portfolio: r.portfolio || '', cv: (user.files || []).find((f) => f.key === 'cv') || null, rating:null, mentees: 0, hours: parseInt(r.hours, 10) || 4 }]
     case 'startup': {
       const name = r.startupName || user.profile?.['Startup name'] || user.name
       const ask = Number(String(r.ask || user.profile?.['Funding ask'] || '50000').replace(/[^\d]/g, '')) || 50000
-      return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: r.execs?.length ? r.execs.map((m) => ({ name: m.name, role: m.role, bg: m.bio, linkedin: m.linkedin })) : [{ name: user.name, role: 'Founder', bg: '' }], pitchVideo: r.pitchVideo || '', traction: Array.isArray(r.tractionMetrics) ? r.tractionMetrics : [...(r.tractionUsers ? [{ k: 'Users', v: String(r.tractionUsers) }] : []), ...(r.tractionRevenue ? [{ k: 'Revenue / mo', v: '$' + String(r.tractionRevenue).replace(/^\$/, '') }] : []), { k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }].slice(0, 4), tractionNotes: r.tractionNotes || '', tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: r.useOfFunds?.length ? r.useOfFunds : [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
+      return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: r.execs?.length ? r.execs.map((m) => ({ name: m.name, role: m.role, bg: m.bio, linkedin: m.linkedin, photo: m.photo || '' })) : [{ name: user.name, role: 'Founder', bg: '' }], pitchVideo: r.pitchVideo || '', product: { desc: r.productDesc || '', website: r.productWebsite || '' }, socials: { linkedin: r.socialLinkedin || '', facebook: r.socialFacebook || '', instagram: r.socialInstagram || '', other: r.socialOther || '' }, deck: (user.files || []).find((f) => f.key === 'deck') || null, traction: Array.isArray(r.tractionMetrics) ? r.tractionMetrics : [...(r.tractionUsers ? [{ k: 'Users', v: String(r.tractionUsers) }] : []), ...(r.tractionRevenue ? [{ k: 'Revenue / mo', v: '$' + String(r.tractionRevenue).replace(/^\$/, '') }] : []), { k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }].slice(0, 4), tractionNotes: r.tractionNotes || '', tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: r.useOfFunds?.length ? r.useOfFunds : [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
     }
 
 
@@ -874,19 +891,31 @@ const safety = setTimeout(done, 3000)
         // Upload the real files into this user's own folder.
         const uploaded = []
         let failed = 0
+        let avatarUrl = ''
+        const execPhotos = {} // executive index -> public photo URL
         for (const f of files) {
           const ext = (f.file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '')
-          const path = `${userId}/${f.key}-${Date.now()}.${ext}`
-          const { error: upErr } = await supabase.storage.from('kyc-docs').upload(path, f.file, { contentType: f.file.type, upsert: false })
+          // A mentor's profile photo is public (students see it); everything else is a private verification document.
+          const isAvatar = f.key === 'avatar'
+          const execIdx = f.key.startsWith('execphoto-') ? Number(f.key.split('-')[1]) : -1
+          const isPublic = isAvatar || execIdx >= 0
+          const path = `${userId}/${isAvatar ? 'photo' : execIdx >= 0 ? 'exec' + execIdx : f.key}-${Date.now()}.${ext}`
+          const { error: upErr } = await supabase.storage.from(isPublic ? 'avatars' : 'kyc-docs').upload(path, f.file, { contentType: f.file.type, upsert: false })
           if (upErr) { console.error('Upload failed:', upErr.message); failed++; continue }
+          if (isPublic) {
+            const url = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+            if (isAvatar) avatarUrl = url; else execPhotos[execIdx] = url
+            continue
+          }
           uploaded.push({ key: f.key, label: f.label, name: f.file.name, path })
         }
 
+        const rawFinal = raw?.execs && Object.keys(execPhotos).length ? { ...raw, execs: raw.execs.map((m, i) => ({ ...m, photo: execPhotos[i] || '' })) } : raw
         const row = {
           id: userId, full_name: name, role, email,
-          country: raw?.country ?? null, bio: raw?.bio ?? null,
-          keywords: raw?.interests || raw?.fields || raw?.sectors || [],
-          details: { profile, raw, docs, files: uploaded },
+          country: rawFinal?.country ?? null, bio: rawFinal?.bio ?? null,
+          keywords: rawFinal?.interests || rawFinal?.fields || rawFinal?.sectors || [],
+          details: { profile, raw: rawFinal, docs, files: uploaded, ...(avatarUrl ? { avatar: avatarUrl } : {}) },
         }
 
         if (resubmit) {
@@ -965,14 +994,90 @@ const safety = setTimeout(done, 3000)
       return {}
     },
 
+    // Upload a public image (for example an executive's photo) and return its URL, or null on failure.
+    async uploadPublicImage(file, prefix = 'img') {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      if (!me?.remote) return URL.createObjectURL(file) // demo accounts: local preview only
+      const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const path = `${me.id}/${prefix}-${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('avatars').upload(path, file, { contentType: file.type, upsert: false })
+      if (error) { console.error('Image upload failed:', error.message); toast('Could not upload the photo. Please try again.'); return null }
+      return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+    },
+
+    // A mentor or student sets or replaces their public profile photo.
+    async uploadMyPhoto(file) {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      const listKey = me?.role === 'student' ? 'students' : 'mentors'
+      const ent = state[listKey].find((m) => m.userId === me?.id)
+      if (!me?.remote || !ent) { toast('Uploading a photo needs a real account.'); return false }
+      const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const path = `${me.id}/photo-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { contentType: file.type, upsert: false })
+      if (upErr) { console.error('Photo upload failed:', upErr.message); toast('Could not upload your photo. Please try again.'); return false }
+      const url = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+      const { error } = await supabase.rpc('set_my_avatar', { p_url: url })
+      if (error) { console.error('set_my_avatar failed:', error.message); toast('Could not save your photo. Please try again.'); return false }
+      setState((st) => ({
+        ...st,
+        [listKey]: st[listKey].map((m) => (m.id === ent.id ? { ...m, photo: url } : m)),
+        users: st.users.map((u) => (u.id === me.id ? { ...u, avatar: url } : u)),
+      }))
+      return true
+    },
+
+    // A startup replaces its pitch deck (PDF): upload to the private bucket, then record it on the profile.
+    async uploadMyDeck(file) {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      const ent = state.startups.find((x) => x.userId === me?.id)
+      if (!me?.remote || !ent) { toast('Uploading a pitch deck needs a real startup account.'); return false }
+      const path = `${me.id}/deck-${Date.now()}.pdf`
+      const { error: upErr } = await supabase.storage.from('kyc-docs').upload(path, file, { contentType: 'application/pdf', upsert: false })
+      if (upErr) { console.error('Deck upload failed:', upErr.message); toast('Could not upload your pitch deck. Please try again.'); return false }
+      const { error } = await supabase.rpc('set_my_deck', { p_file: { name: file.name, path } })
+      if (error) { console.error('set_my_deck failed:', error.message); toast('Could not save your pitch deck. Please try again.'); return false }
+      const deck = { key: 'deck', label: 'Pitch deck', name: file.name, path }
+      setState((st) => ({
+        ...st,
+        startups: st.startups.map((x) => (x.id === ent.id ? { ...x, deck } : x)),
+        users: st.users.map((u) => (u.id === me.id ? { ...u, files: [...(u.files || []).filter((f) => f.key !== 'deck'), deck] } : u)),
+      }))
+      return true
+    },
+
+    // A mentor (key "cv") or student (key "resume") replaces their CV: upload to the private bucket, then record it.
+    async uploadMyCv(file) {
+      const me = state.users.find((u) => u.id === state.currentUserId)
+      const student = me?.role === 'student'
+      const listKey = student ? 'students' : 'mentors'
+      const key = student ? 'resume' : 'cv'
+      const ent = state[listKey].find((m) => m.userId === me?.id)
+      if (!me?.remote || !ent) { toast('Uploading a CV needs a real account.'); return false }
+      const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const path = `${me.id}/${key}-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('kyc-docs').upload(path, file, { contentType: file.type, upsert: false })
+      if (upErr) { console.error('CV upload failed:', upErr.message); toast('Could not upload your CV. Please try again.'); return false }
+      const { error } = await supabase.rpc('set_my_cv', { p_file: { name: file.name, path } })
+      if (error) { console.error('set_my_cv failed:', error.message); toast('Could not save your CV. Please try again.'); return false }
+      const cv = { key, label: 'CV / résumé', name: file.name, path }
+      setState((st) => ({
+        ...st,
+        [listKey]: st[listKey].map((m) => (m.id === ent.id ? { ...m, cv } : m)),
+        users: st.users.map((u) => (u.id === me.id ? { ...u, files: [...(u.files || []).filter((f) => f.key !== key), cv] } : u)),
+      }))
+      return true
+    },
+
     // Startup listings of real members are saved to Supabase first (update_my_listing), then shown.
     // Everything else, and sample/demo records, stays in local state. Returns false if saving failed.
     async updateEntity(listKey, id, patch) {
-      const ent = listKey === 'startups' ? state.startups.find((x) => x.id === id) : null
-      const raw = ent?.userId ? listingToRaw(patch) : null
+      const toRaw = { startups: listingToRaw, mentors: mentorToRaw, students: studentToRaw }[listKey]
+      const ent = toRaw ? state[listKey].find((x) => x.id === id) : null
+      const raw = ent?.userId ? toRaw(patch) : null
       if (raw) {
-        const { error } = await supabase.rpc('update_my_listing', { p_raw: raw })
-        if (error) { console.error('update_my_listing failed:', error.message); toast('Could not save your listing. Please try again.'); return false }
+        const fn = listKey === 'startups' ? 'update_my_listing' : 'update_my_profile'
+        const { error } = await supabase.rpc(fn, { p_raw: raw })
+        if (error) { console.error(fn + ' failed:', error.message); toast('Could not save your changes. Please try again.'); return false }
       }
       setState((s) => ({
         ...s,

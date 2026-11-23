@@ -1,10 +1,27 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BadgeCheck, Bookmark, BookmarkCheck, Calendar, Eye, EyeOff, MapPin, MessageCircle, Rocket, Search, Sparkles, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BadgeCheck, Bookmark, BookmarkCheck, Calendar, ExternalLink, Eye, EyeOff, FileText, Globe, Link2, MapPin, MessageCircle, Rocket, Search, Sparkles, Users } from 'lucide-react'
 import { Avatar, ChipSelect, Empty, Modal, Toggle, money } from '../components/ui'
 import { SECTORS, STAGES } from '../data/demo'
 import { useStore } from '../store'
 import { recommendStartups } from '../lib/recommend'
+
+const safeHttp = (u) => (/^https?:\/\/\S+$/i.test((u || '').trim()) ? u.trim() : null)
+
+// YouTube and Vimeo links can be played inline; anything else opens in a new tab.
+function embedUrl(u) {
+  try {
+    const url = new URL(u)
+    const host = url.hostname.replace(/^www\./, '')
+    if (host === 'youtu.be') return 'https://www.youtube-nocookie.com/embed/' + url.pathname.slice(1)
+    if (host.endsWith('youtube.com')) {
+      const id = url.searchParams.get('v') || (url.pathname.match(/^\/(?:embed|shorts)\/([\w-]+)/) || [])[1]
+      return id ? 'https://www.youtube-nocookie.com/embed/' + id : null
+    }
+    if (host === 'vimeo.com') { const id = url.pathname.match(/^\/(\d+)/)?.[1]; return id ? 'https://player.vimeo.com/video/' + id : null }
+  } catch { /* not a valid URL */ }
+  return null
+}
 
 export function StartupCard({ s, saved, onSave, why }) {
   const nav = useNavigate()
@@ -38,7 +55,6 @@ export function InvestorHome() {
   const chats = state.conversations.filter((c) => c.ownerId === user.id && c.peer.kind === 'startup')
   const recs = useMemo(() => recommendStartups(entity, state.startups), [entity, state.startups])
   const totalAsk = state.startups.reduce((a, s) => a + (s.ask || 0), 0)
-  const totalRaised = state.startups.reduce((a, s) => a + (s.raised || 0), 0)
   const bySector = Object.entries(state.startups.reduce((o, s) => ({ ...o, [s.sector]: (o[s.sector] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1])
   const mySectors = entity.sectors || []
   const kpis = [
@@ -106,8 +122,6 @@ export function InvestorHome() {
           <div className="card card-pad">
             <div className="xs faint bold">MARKET SNAPSHOT</div>
             <div className="row-between small mt-3"><span className="muted">Total being raised</span><b>{money(totalAsk)}</b></div>
-            <div className="row-between small mt-2"><span className="muted">Already committed</span><b>{money(totalRaised)}</b></div>
-            <div className="progress blue mt-3"><span style={{ width: Math.min(100, totalAsk ? (totalRaised / totalAsk) * 100 : 0) + '%' }} /></div>
             <div className="row wrap mt-3" style={{ gap: 6 }}>{bySector.slice(0, 5).map(([s, n]) => <span key={s} className="badge badge-gray">{s} · {n}</span>)}</div>
           </div>
         </div>
@@ -177,8 +191,12 @@ export function Saved() {
 
 export function StartupDetail() {
   const { id } = useParams()
-  const { state, user, toggleSave, startChat, sendMessage, toast } = useStore()
+  const { state, user, toggleSave, startChat, sendMessage, docUrl, toast } = useStore()
   const nav = useNavigate()
+  const openDeck = async (path) => {
+    const url = await docUrl(path) // shows its own error toast on failure
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
   const [tab, setTab] = useState('pitch')
   const [chatOpen, setChatOpen] = useState(false)
   const s = state.startups.find((x) => x.id === id)
@@ -186,6 +204,16 @@ export function StartupDetail() {
   const [msg, setMsg] = useState(founder ? `Namaste ${founder.name.replace(/^(Dr\.|Er\.|CA)\s+/, '').split(' ')[0]}, I came across ${s.name} on Aakar and would love to learn more about your round.` : '')
   if (!s) return <div className="page"><Empty title="Startup not found" /></div>
   const saved = (state.saved[user.id] || []).includes(s.id)
+  const video = safeHttp(s.pitchVideo)
+  const embed = video ? embedUrl(video) : null
+  const videoBlock = video && (embed
+    ? <div className="card pitch-block" style={{ padding: 0, overflow: 'hidden' }}><div style={{ aspectRatio: '16 / 9' }}><iframe title={`${s.name} pitch video`} src={embed} style={{ width: '100%', height: '100%', border: 0 }} allow="encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" loading="lazy" /></div></div>
+    : <a href={video} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }}>Watch pitch video <ExternalLink size={15} /></a>)
+  const social = s.socials || {}
+  const links = [
+    ['Website', safeHttp(s.product?.website), Globe], ['LinkedIn', safeHttp(social.linkedin), Link2], ['Facebook', safeHttp(social.facebook), Link2],
+    ['Instagram', safeHttp(social.instagram), Link2], ['Other', safeHttp(social.other), ExternalLink],
+  ].filter(([, href]) => href)
   const isInvestor = user.role === 'investor'
   const existing = state.conversations.find((c) => c.ownerId === user.id && c.peer.refId === s.id)
 
@@ -224,14 +252,33 @@ export function StartupDetail() {
           </div>
 
           <div className="tabs mt-8">
-            {[['pitch', 'Pitch'], ['traction', 'Traction'], ['team', 'Team'], ['funds', 'Use of funds']].map(([k, l]) => <button key={k} className={`tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{l}</button>)}
+            {[['pitch', 'Pitch'], ['product', 'Product'], ['traction', 'Traction'], ['team', 'Team'], ['funds', 'Use of funds']].map(([k, l]) => <button key={k} className={`tab ${tab === k ? 'active' : ''}`} onClick={() => setTab(k)}>{l}</button>)}
           </div>
           {tab === 'pitch' && (
             <div className="stack" style={{ gap: 16 }}>
               {[['The problem', s.pitch.problem], ['Our solution', s.pitch.solution], ['Market', s.pitch.market], ['Business model', s.pitch.model]].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k} className="card card-pad pitch-block"><h4>{k}</h4><p>{v}</p></div>
               ))}
-              {s.pitchVideo && <a href={s.pitchVideo} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }}>Watch pitch video <ArrowRight size={16} /></a>}
+              {videoBlock}
+              {s.deck?.path && isInvestor && <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={() => openDeck(s.deck.path)}><FileText size={16} /> View pitch deck</button>}
+              {!video && !s.deck?.path && <p className="small muted">No pitch video or deck has been shared yet.</p>}
+            </div>
+          )}
+          {tab === 'product' && (
+            <div className="stack" style={{ gap: 16 }}>
+              <div className="card card-pad pitch-block"><h4>What they build</h4><p>{s.product?.desc || 'The founders have not described their product yet.'}</p></div>
+              <div>
+                <div className="xs faint bold" style={{ marginBottom: 10 }}>PITCH VIDEO</div>
+                {videoBlock || <div className="card card-pad"><p className="small muted">This startup has not shared a pitch video yet.</p></div>}
+              </div>
+              {links.length > 0 && (
+                <div className="card card-pad">
+                  <div className="xs faint bold">LINKS</div>
+                  <div className="row wrap mt-3" style={{ gap: 8 }}>
+                    {links.map(([label, href, Icon]) => <a key={label} href={href} target="_blank" rel="noopener noreferrer" className="btn btn-soft btn-sm"><Icon size={14} /> {label}</a>)}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {tab === 'traction' && (
@@ -241,9 +288,20 @@ export function StartupDetail() {
             </div>
           )}
           {tab === 'team' && (
-            <div className="stack">{s.founders.map((f) => (
-              <div key={f.name} className="card card-pad row"><Avatar p={{ initials: f.name.split(' ').map((w) => w[0]).join('').slice(0, 2), color: s.color }} size="lg" /><div><div className="bold">{f.name}</div><div className="small muted">{f.role}{f.bg && ` · ${f.bg}`}</div>{f.linkedin && <a href={f.linkedin} target="_blank" rel="noopener noreferrer" className="xs link">LinkedIn</a>}</div></div>
-            ))}</div>
+            <div className="stack" style={{ gap: 16 }}>{s.founders.map((f) => {
+              const li = safeHttp(f.linkedin)
+              return (
+                <div key={f.name} className="card card-pad row" style={{ alignItems: 'flex-start', gap: 18 }}>
+                  <Avatar p={{ name: f.name, initials: f.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase(), color: s.color, photo: f.photo }} size="xl" />
+                  <div className="grow">
+                    <div className="bold" style={{ fontSize: 18 }}>{f.name}</div>
+                    <div className="small muted">{f.role}</div>
+                    {f.bg && <p className="small mt-3" style={{ color: 'var(--ink-2)' }}>{f.bg}</p>}
+                    {li && <a href={li} target="_blank" rel="noopener noreferrer" className="btn btn-soft btn-sm mt-3"><Link2 size={14} /> LinkedIn</a>}
+                  </div>
+                </div>
+              )
+            })}</div>
           )}
           {tab === 'funds' && (
             <div className="card card-pad stack" style={{ gap: 16 }}>
@@ -258,8 +316,6 @@ export function StartupDetail() {
           <div className="card card-pad">
             <div className="xs faint bold">RAISING</div>
             <div className="serif" style={{ fontSize: 38, fontWeight: 600, letterSpacing: '-.02em' }}>{money(s.ask)}</div>
-            <div className="progress mt-3"><span style={{ width: `${Math.min(100, (s.raised / s.ask) * 100)}%` }} /></div>
-            <div className="row-between small mt-2"><span><b>{money(s.raised)}</b> committed</span><span className="muted">{Math.round((s.raised / s.ask) * 100)}%</span></div>
             <hr className="divider" />
             <div className="grid-2" style={{ gap: 12 }}>
               <div><div className="xs muted">Equity offered</div><div className="bold">{s.equity}%</div></div>
@@ -274,9 +330,19 @@ export function StartupDetail() {
               </div>
             )}
           </div>
+          {(s.deck?.path || video || links.length > 0) && (
+            <div className="card card-pad">
+              <div className="xs faint bold">MATERIALS &amp; LINKS</div>
+              <div className="stack mt-3" style={{ gap: 8 }}>
+                {s.deck?.path && isInvestor && <button type="button" className="btn btn-soft btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => openDeck(s.deck.path)}><FileText size={14} /> Pitch deck</button>}
+                {video && <a href={video} target="_blank" rel="noopener noreferrer" className="btn btn-soft btn-sm" style={{ justifyContent: 'flex-start' }}><ExternalLink size={14} /> Pitch video</a>}
+                {links.map(([label, href, Icon]) => <a key={label} href={href} target="_blank" rel="noopener noreferrer" className="btn btn-soft btn-sm" style={{ justifyContent: 'flex-start' }}><Icon size={14} /> {label}</a>)}
+              </div>
+            </div>
+          )}
           {founder && (
             <div className="card card-pad row">
-              <Avatar p={{ initials: founder.name.split(' ').map((w) => w[0]).join('').slice(0, 2), color: s.color }} />
+              <Avatar p={{ name: founder.name, initials: founder.name.split(' ').map((w) => w[0]).join('').slice(0, 2), color: s.color, photo: founder.photo }} />
               <div className="grow"><div className="bold small">{founder.name}</div><div className="xs muted">{founder.role} · usually replies within a day</div></div>
             </div>
           )}

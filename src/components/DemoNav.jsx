@@ -18,7 +18,7 @@ const PAGES = {
   investor: [['/app/startups', 'Discover startups'], ['/app/startups/s1', 'Startup detail'], ['/app/saved', 'Saved'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile & visibility']],
   startup: [['/app', 'Dashboard'], ['/app/investors', 'Investors'], ['/app/messages', 'Messages'], ['/app/profile', 'My listing']],
   student: [['/app', 'Home'], ['/app/sessions', 'Sessions'], ['/app/mentors', 'Find mentors'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile']],
-  professional: [['/app', 'Home & requests'], ['/app/sessions', 'My sessions'], ['/app/students', 'Students'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile']],
+  professional: [['/app', 'Home & requests'], ['/app/sessions', 'My sessions'], ['/app/requests', 'Mentorship requests'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile']],
   admin: [['/admin', 'Verification queue']],
 }
 

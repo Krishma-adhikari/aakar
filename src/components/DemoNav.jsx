@@ -9,16 +9,15 @@ import { useStore } from '../store'
 export const DEMO_MODE = true
 
 const ACCOUNTS = {
-  investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', organization: 'u-org', admin: 'u-admin',
+  investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', admin: 'u-admin',
 }
 
 const PAGES = {
-  public: [['/', 'Landing page'], ['/register', 'Choose role'], ['/register/investor', 'Register: investor'], ['/register/startup', 'Register: startup'], ['/register/student', 'Register: student'], ['/register/professional', 'Register: professional'], ['/register/organization', 'Register: organization'], ['/login', 'Login']],
+  public: [['/', 'Landing page'], ['/register', 'Choose role'], ['/register/investor', 'Register: investor'], ['/register/startup', 'Register: startup'], ['/register/student', 'Register: student'], ['/register/professional', 'Register: professional'], ['/login', 'Login']],
   investor: [['/app/startups', 'Discover startups'], ['/app/startups/s1', 'Startup detail'], ['/app/saved', 'Saved'], ['/app/messages', 'Messages'], ['/app/helpdesk', 'Tech Help Desk'], ['/app/profile', 'Profile & visibility']],
   startup: [['/app', 'Dashboard'], ['/app/investors', 'Investors'], ['/app/messages', 'Messages'], ['/app/helpdesk', 'Tech Help Desk'], ['/app/profile', 'My listing']],
   student: [['/app', 'Home'], ['/app/sessions', 'Sessions'], ['/app/mentors', 'Find mentors'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile']],
   professional: [['/app', 'Home & requests'], ['/app/sessions', 'My sessions'], ['/app/students', 'Students'], ['/app/helpdesk', 'Tech Help Desk'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile']],
-  organization: [['/app/helpdesk', 'Tech Help Desk'], ['/app/messages', 'Messages'], ['/app/profile', 'Profile']],
   admin: [['/admin', 'Verification queue']],
 }
 
@@ -29,7 +28,7 @@ export default function DemoNav() {
   const [open, setOpen] = useState(false)
   const role = user?.role
 
-  // Shareable links: add ?as=student (or investor, startup, professional, organization, admin) to any URL.
+  // Shareable links: add ?as=student (or investor, startup, professional, admin) to any URL.
   // The param is applied once, then removed so it can't override later role switches.
   const handled = useRef(null)
   useEffect(() => {

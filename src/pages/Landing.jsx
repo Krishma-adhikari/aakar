@@ -172,7 +172,7 @@ const pillars = [
 ]
 
 const steps = [
-  { icon: UserPlus, title: 'Pick your role', text: 'Investor, startup, student, professional or organization.' },
+  { icon: UserPlus, title: 'Pick your role', text: 'Investor, startup, student or professional.' },
   { icon: FileCheck2, title: 'Submit your profile', text: 'Add your details and the documents needed to verify you.' },
   { icon: ShieldCheck, title: 'Get verified', text: 'Our admin team checks every profile, usually within 24 hours.', alt: true },
   { icon: Sparkles, title: 'Start connecting', text: 'Invest, mentor, learn or solve problems with people you can trust.' },
@@ -258,7 +258,7 @@ export default function Landing() {
           <div className="section-head" style={{ marginBottom: 48 }}>
             <span className="eyebrow">How it works</span>
             <h2>Verified people only. <span>That’s the whole point.</span></h2>
-            <p>Every investor, founder, student, mentor and organization is reviewed by an admin before they can use Aakar, so trust is built in from day one.</p>
+            <p>Every investor, founder, student and mentor is reviewed by an admin before they can use Aakar, so trust is built in from day one.</p>
           </div>
           <div className="steps">
             {steps.map((s, i) => (

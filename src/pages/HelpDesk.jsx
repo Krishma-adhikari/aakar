@@ -10,7 +10,7 @@ const URG = { High: 'badge-red', Medium: 'badge-amber', Low: 'badge-gray' }
 export default function HelpDesk() {
   const { state, user, entity, postChallenge, respondChallenge, startChat, toast } = useStore()
   const nav = useNavigate()
-  const canPost = user.role === 'organization' || user.role === 'startup'
+  const canPost = user.role === 'startup'
   const [tab, setTab] = useState(canPost ? 'mine' : 'open')
   const [q, setQ] = useState('')
   const [cats, setCats] = useState([])
@@ -19,7 +19,7 @@ export default function HelpDesk() {
   const [answer, setAnswer] = useState('')
   const [form, setForm] = useState({ title: '', category: CATEGORIES[0], urgency: 'Medium', desc: '', tags: '' })
 
-  const posterOf = (c) => (c.posterType === 'startup' ? state.startups : state.organizations).find((x) => x.id === c.posterId)
+  const posterOf = (c) => state.startups.find((x) => x.id === c.posterId)
   const isMine = (c) => c.posterId === entity.id
 
   let list = state.challenges
@@ -28,7 +28,7 @@ export default function HelpDesk() {
   list = list.filter((c) => (!q || (c.title + c.desc).toLowerCase().includes(q.toLowerCase())) && (!cats.length || cats.includes(c.category)))
 
   const submitPost = () => {
-    postChallenge({ posterType: user.role === 'startup' ? 'startup' : 'organization', posterId: entity.id, title: form.title, category: form.category, urgency: form.urgency, desc: form.desc, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) })
+    postChallenge({ posterType: 'startup', posterId: entity.id, title: form.title, category: form.category, urgency: form.urgency, desc: form.desc, tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean) })
     toast('Challenge posted. Professionals in that field will see it.')
     setPosting(false); setTab('mine')
     setForm({ title: '', category: CATEGORIES[0], urgency: 'Medium', desc: '', tags: '' })
@@ -36,7 +36,7 @@ export default function HelpDesk() {
 
   const submitAnswer = () => {
     const p = posterOf(answering)
-    respondChallenge(answering.id, { name: user.name, initials: user.initials, color: user.color }, answer, { name: p.name, initials: p.initials, color: p.color, subtitle: `Re: ${answering.title}`, kind: answering.posterType === 'startup' ? 'startup' : 'organization', refId: p.id })
+    respondChallenge(answering.id, { name: user.name, initials: user.initials, color: user.color }, answer, { name: p.name, initials: p.initials, color: p.color, subtitle: `Re: ${answering.title}`, kind: 'startup', refId: p.id })
     toast(`Solution sent to ${p.name}`)
     setAnswering(null); setAnswer('')
     nav('/app/messages')

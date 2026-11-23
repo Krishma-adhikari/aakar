@@ -12,7 +12,6 @@ const initial = () => ({
   investors: demo.investors,
   mentors: demo.mentors,
   students: demo.students,
-  organizations: demo.organizations,
   sessions: demo.sessions,
   requests: demo.mentorshipRequests,
   challenges: demo.challenges,
@@ -22,7 +21,7 @@ const initial = () => ({
 })
 
 // TEMPORARY demo shortcut: ?as=student (etc.) signs in as that demo account on load.
-const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', organization: 'u-org', admin: 'u-admin' }
+const DEMO_AS = { investor: 'u-inv', startup: 'u-sup', student: 'u-stu', professional: 'u-pro', admin: 'u-admin' }
 function load() {
   let st = initial()
   try {
@@ -56,8 +55,6 @@ function buildEntity(user) {
       const ask = Number(String(r.ask || user.profile?.['Funding ask'] || '50000').replace(/[^\d]/g, '')) || 50000
       return ['startups', { ...base, name, initials: initialsOf(name), color: pickColor(name), tagline: r.tagline || 'A new Nepali startup on Aakar.', sector: r.sector || user.profile?.Sector || 'E-commerce', stage: r.stage || user.profile?.Stage || 'Pre-seed', location: r.location || user.profile?.Location || 'Kathmandu', founded: Number(r.founded) || new Date().getFullYear(), team: Number(r.team) || 3, ask, raised: 0, equity: Number(r.equity) || 10, valuation: '—', founders: [{ name: user.name, role: 'Founder', bg: '' }], traction: [{ k: 'Stage', v: r.stage || 'Pre-seed' }, { k: 'Team', v: String(r.team || 3) }, { k: 'Founded', v: String(r.founded || new Date().getFullYear()) }], tags: [], pitch: { problem: r.problem || '', solution: r.solution || '', market: r.market || '', model: r.model || '' }, useOfFunds: [{ label: 'Product', pct: 50 }, { label: 'Growth', pct: 30 }, { label: 'Operations', pct: 20 }], views: 0, interested: 0 }]
     }
-    case 'organization':
-      return ['organizations', { ...base, type: r.orgType || user.profile?.['Organization type'] || 'NGO', district: r.district || user.profile?.District || '' }]
     default:
       return [null, null]
   }
@@ -84,7 +81,7 @@ export function StoreProvider({ children }) {
 
   const entityOf = useCallback((u) => {
     if (!u?.refId) return null
-    const list = { investor: state.investors, student: state.students, startup: state.startups, professional: state.mentors, organization: state.organizations }[u.role]
+    const list = { investor: state.investors, student: state.students, startup: state.startups, professional: state.mentors }[u.role]
     return list?.find((x) => x.id === u.refId) || null
   }, [state])
 
@@ -251,7 +248,7 @@ export function useNotifications() {
         out.push({ id: 'n-' + r.id, icon: 'user', text: `${st?.name} requested mentorship`, sub: r.message.slice(0, 70) + '…', to: '/app', at: r.at })
       })
     }
-    if (user.role === 'organization' || user.role === 'startup') {
+    if (user.role === 'startup') {
       state.challenges.filter((c) => c.posterId === entity.id).forEach((c) => c.responses.forEach((r, i) => {
         out.push({ id: `n-${c.id}-${i}`, icon: 'bulb', text: `${r.name} suggested a solution`, sub: c.title, to: '/app/helpdesk', at: r.at })
       }))

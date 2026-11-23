@@ -1,14 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Briefcase, Building2, Check, FileUp, GraduationCap, Landmark, Moon, Rocket, Sun, X, CheckCircle2 } from 'lucide-react'
+import { Briefcase, Check, FileUp, GraduationCap, Landmark, Moon, Rocket, Sun, X, CheckCircle2 } from 'lucide-react'
 
 export const ROLES = {
   investor: { label: 'Investor', icon: Landmark, color: 'var(--primary)', bg: 'var(--primary-50)', grad: 'linear-gradient(135deg,#3a6cf0,#1d47c8)', blurb: 'Discover vetted Nepali startups, read pitches and chat directly with founders.', who: 'Angels, VCs and diaspora funds' },
   startup: { label: 'Startup', icon: Rocket, color: 'var(--violet)', bg: 'var(--violet-50)', grad: 'linear-gradient(135deg,#8b6cf5,#5b3ad6)', blurb: 'List your profile, pitch and funding needs in front of investors worldwide.', who: 'Founders building in Nepal' },
   student: { label: 'Student', icon: GraduationCap, color: 'var(--green)', bg: 'var(--green-50)', grad: 'linear-gradient(135deg,#22c58b,#0a8a5f)', blurb: 'Get matched with Nepali mentors abroad and join sessions in your field.', who: '+2, Bachelor and Master students' },
   professional: { label: 'Professional', icon: Briefcase, color: 'var(--amber)', bg: 'var(--amber-50)', grad: 'linear-gradient(135deg,#f6b73c,#d1830a)', blurb: 'Mentor students voluntarily, host group sessions and solve local tech problems.', who: 'Nepali professionals abroad' },
-  organization: { label: 'Organization', icon: Building2, color: 'var(--teal)', bg: 'var(--teal-50)', grad: 'linear-gradient(135deg,#22b8d8,#0a7f9c)', blurb: 'Post technical challenges and get solutions from the diaspora tech community.', who: 'NGOs, schools and local bodies' },
 }
 
 export function LogoMark({ size = 34 }) {

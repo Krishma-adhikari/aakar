@@ -39,7 +39,7 @@ export default function App() {
           <Route path="/pending" element={<Pending />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/app" element={<AppShell />}>
-            <Route index element={<ByRole investor={<Discover />} startup={<StartupHome />} student={<StudentHome />} professional={<ProHome />} organization={<Navigate to="/app/helpdesk" replace />} />} />
+            <Route index element={<ByRole investor={<Discover />} startup={<StartupHome />} student={<StudentHome />} professional={<ProHome />} />} />
             <Route path="startups" element={<ByRole investor={<Discover />} />} />
             <Route path="startups/:id" element={<StartupDetail />} />
             <Route path="saved" element={<ByRole investor={<Saved />} />} />
@@ -49,7 +49,7 @@ export default function App() {
             <Route path="students" element={<ByRole professional={<ProStudents />} />} />
             <Route path="helpdesk" element={<HelpDesk />} />
             <Route path="messages" element={<Messages />} />
-            <Route path="profile" element={<ByRole investor={<InvestorProfile />} startup={<StartupProfile />} student={<Profile />} professional={<Profile />} organization={<Profile />} />} />
+            <Route path="profile" element={<ByRole investor={<InvestorProfile />} startup={<StartupProfile />} student={<Profile />} professional={<Profile />} />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

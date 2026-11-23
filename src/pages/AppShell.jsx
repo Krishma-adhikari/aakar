@@ -1,19 +1,50 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Avatar, Logo, RoleBadge, ThemeToggle, ago } from '../components/ui'
-import SignOutButton from '../components/SignOutButton' // NEW
+import SignOutButton from '../components/SignOutButton'
 import {
   Bell, Bookmark, CalendarDays, CheckCircle2, Compass, GraduationCap, Home, Landmark, Lightbulb, LogOut, MessageCircle,
-  Rocket, User, Users, Wrench,
+  Rocket, User, Users, Wallet, Wrench,
 } from 'lucide-react'
 import { useNotifications, useStore } from '../store'
 
+// Sidebar menu per role. Each item is [path, label, Icon].
 const NAV = {
-  investor: [['/app/startups', 'Discover startups', Compass], ['/app/saved', 'Saved', Bookmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My profile', User]],
-  startup: [['/app', 'Dashboard', Home], ['/app/investors', 'Investors', Landmark], ['/app/messages', 'Messages', MessageCircle], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/profile', 'My listing', Rocket]],
-  student: [['/app', 'Home', Home], ['/app/sessions', 'Sessions', CalendarDays], ['/app/mentors', 'Find mentors', Users], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'My profile', User]],
-  professional: [['/app', 'Home', Home], ['/app/sessions', 'My sessions', CalendarDays], ['/app/students', 'Matched Students', GraduationCap], ['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'My profile', User]],
-  organization: [['/app/helpdesk', 'Tech Help Desk', Wrench], ['/app/messages', 'Messages', MessageCircle], ['/app/profile', 'Organization', User]],
+  investor: [
+    ['/app/startups', 'Discover startups', Compass],
+    ['/app/saved', 'Saved', Bookmark],
+    ['/app/messages', 'Messages', MessageCircle],
+    ['/app/helpdesk', 'Tech Help Desk', Wrench],
+    ['/app/profile', 'My profile', User],
+  ],
+  startup: [
+    ['/app', 'Dashboard', Home],
+    ['/app/investors', 'Investors', Landmark],
+    ['/app/messages', 'Messages', MessageCircle],
+    ['/app/helpdesk', 'Tech Help Desk', Wrench],
+    ['/app/profile', 'My listing', Rocket],
+  ],
+  student: [
+    ['/app', 'Home', Home],
+    ['/app/sessions', 'Sessions', CalendarDays],
+    ['/app/mentors', 'Find mentors', Users],
+    ['/app/paid-mentorship', 'Paid mentorship', Wallet], // NEW
+    ['/app/messages', 'Messages', MessageCircle],
+    ['/app/profile', 'My profile', User],
+  ],
+  professional: [
+    ['/app', 'Home', Home],
+    ['/app/sessions', 'My sessions', CalendarDays],
+    ['/app/students', 'Matched Students', GraduationCap],
+    ['/app/helpdesk', 'Tech Help Desk', Wrench],
+    ['/app/messages', 'Messages', MessageCircle],
+    ['/app/profile', 'My profile', User],
+  ],
+  organization: [
+    ['/app/helpdesk', 'Tech Help Desk', Wrench],
+    ['/app/messages', 'Messages', MessageCircle],
+    ['/app/profile', 'Organization', User],
+  ],
 }
 
 const NIcon = { session: CalendarDays, check: CheckCircle2, user: User, bulb: Lightbulb, chat: MessageCircle, rocket: Rocket }
@@ -63,16 +94,23 @@ function Notifications() {
 export default function AppShell() {
   const { user, entity, logout, state, unreadTotal } = useStore()
   const nav = useNavigate()
-  const { pathname } = useLocation() // NEW
+  const { pathname } = useLocation()
+
   if (!user) return <Navigate to="/login" replace />
   if (user.role === 'admin') return <Navigate to="/admin" replace />
   if (user.status !== 'approved') return <Navigate to="/pending" replace />
 
-  const items = NAV[user.role]
-  // Messages badge = messages from the other person that I have not seen yet.
-  // It clears when I open the chat, and comes back when a new message arrives.
-  const reqCount = user.role === 'professional' ? state.requests.filter((r) => r.mentorId === entity?.id && r.status === 'pending').length : 0
+  const items = NAV[user.role] || [] // safe fallback if a role has no menu
 
+  // Mentor "Home" badge = pending mentorship requests waiting for me.
+  const reqCount = user.role === 'professional'
+    ? state.requests.filter((r) => r.mentorId === entity?.id && r.status === 'pending').length
+    : 0
+
+  const goProfile = () => nav('/app/profile')
+  const doLogout = () => { logout(); nav('/') }
+
+  // Messages badge = unseen messages from the other person.
   const links = items.map(([to, label, I]) => (
     <NavLink key={to} to={to} end={to === '/app'} className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}>
       <I size={18} /> {label}
@@ -88,11 +126,14 @@ export default function AppShell() {
         <div className="side-section">Menu</div>
         {links}
         <div className="side-user">
-          <span onClick={() => nav('/app/profile')} style={{ cursor: 'pointer', display: 'inline-flex' }} title="My profile">
+          <span onClick={goProfile} style={{ cursor: 'pointer', display: 'inline-flex' }} title="My profile">
             <Avatar p={user} size="sm" />
           </span>
-          <div className="grow" onClick={() => nav('/app/profile')} style={{ cursor: 'pointer', minWidth: 0 }} title="My profile"><div className="small bold" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div><RoleBadge role={user.role} /></div>
-          <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={() => { logout(); nav('/') }} aria-label="Log out" title="Log out"><LogOut size={15} /></button>
+          <div className="grow" onClick={goProfile} style={{ cursor: 'pointer', minWidth: 0 }} title="My profile">
+            <div className="small bold" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
+            <RoleBadge role={user.role} />
+          </div>
+          <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={doLogout} aria-label="Log out" title="Log out"><LogOut size={15} /></button>
         </div>
       </aside>
       <div className="main">
@@ -101,15 +142,17 @@ export default function AppShell() {
             <span className="badge badge-green mobile-hide"><CheckCircle2 size={12} /> Verified {user.role}</span>
             <ThemeToggle />
             <Notifications />
-            {/* NEW: top-right avatar opens the profile */}
-            <span onClick={() => nav('/app/profile')} style={{ cursor: 'pointer', display: 'inline-flex' }} title="My profile">
+            <span onClick={goProfile} style={{ cursor: 'pointer', display: 'inline-flex' }} title="My profile">
               <Avatar p={user} size="sm" />
             </span>
           </div>
         </header>
-        <nav className="mobile-nav">{links}<button className="side-link" style={{ border: 0, background: 'none' }} onClick={() => { logout(); nav('/') }}><LogOut size={16} /> Log out</button></nav>
+        <nav className="mobile-nav">
+          {links}
+          <button className="side-link" style={{ border: 0, background: 'none' }} onClick={doLogout}><LogOut size={16} /> Log out</button>
+        </nav>
         <Outlet />
-        {/* NEW: Sign out, shown only on the profile page */}
+        {/* Sign out button, shown only on the profile page */}
         {pathname === '/app/profile' && (
           <div style={{ padding: '0 clamp(16px, 4vw, 40px) 40px' }}>
             <SignOutButton />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight, ArrowUpRight, BadgeCheck, Bell, CalendarDays, CheckCircle2, FileCheck2, MapPin,
-  MessageCircle, Play, Quote, Rocket, Send, ShieldCheck, Sparkles, Star, UserPlus, Users,
+  MessageCircle, Play, Rocket, Send, ShieldCheck, Sparkles, UserPlus, Users,
   Menu, X,
 } from 'lucide-react'
 import { Avatar, Logo, Pagoda, ROLES, Skyline, Stupa, ThemeToggle, money, nptParts } from '../components/ui'
@@ -17,7 +17,7 @@ const pct = (s) => (s.ask ? Math.min(100, Math.round((s.raised / s.ask) * 100)) 
 /* ---------- Nav ---------- */
 const NAV = [['#features', 'Features'], ['#how', 'How it works'], ['#who', 'Who it’s for'], ['#startups', 'Startups']]
 
-function Nav({ showStories }) {
+function Nav() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
   useEffect(() => {
@@ -26,7 +26,7 @@ function Nav({ showStories }) {
     window.addEventListener('scroll', f, { passive: true })
     return () => window.removeEventListener('scroll', f)
   }, [])
-  const links = showStories ? [...NAV, ['#stories', 'Success stories']] : NAV
+  const links = NAV
   const close = () => setOpen(false)
   return (
     <header className={`nav ${scrolled ? 'scrolled' : ''}`}>
@@ -193,13 +193,6 @@ const steps = [
   { icon: Sparkles, title: 'Start connecting', text: 'Invest, mentor, learn or solve problems with people you can trust.' },
 ]
 
-// Made-up stats and testimonials. Shown in demo mode only, never to real visitors.
-const demoStories = [
-  { quote: 'I left Nepal 9 years ago with no one to ask about grad school. On Aakar I spend one evening a month and help 60 students at once.', who: demoMentors[0], role: `${demoMentors[0].title}, ${demoMentors[0].company}`, feature: true },
-  { quote: 'Two diaspora angels found us on Aakar in our first week. That chat turned into $140k for our seed round.', who: { initials: 'AT', color: '#0f9f6e', name: 'Anisha Thapa' }, role: 'Founder, Krishi Sathi' },
-  { quote: 'Dr. Asmita reviewed my SOP three times. I’m now starting my MPH in the UK on a Chevening scholarship.', who: { initials: 'PD', color: '#6d4ae6', name: 'Prerana Dahal' }, role: 'Student, Tribhuvan University' },
-]
-
 /* ---------- Page ---------- */
 export default function Landing() {
   const { state } = useStore()
@@ -232,12 +225,11 @@ export default function Landing() {
     .slice(0, 3), [state.sessions])
 
   const avatars = DEMO_ENABLED ? demoMentors.slice(0, 4) : state.mentors.slice(0, 4)
-  const showStories = DEMO_ENABLED
 
   return (
     <div>
       <IntroAnimation />
-      <Nav showStories={showStories} />
+      <Nav />
 
       <section className="hero">
         <div className="container hero-grid">
@@ -392,33 +384,12 @@ export default function Landing() {
         </div>
       </section>
 
-      {(showStories || upcoming.length > 0) && (
-        <section className="section" id="stories">
+      {upcoming.length > 0 && (
+        <section className="section" id="sessions">
           <div className="container">
-            {showStories && (
-              <>
-                <div className="section-head center">
-                  <span className="eyebrow">Success stories</span>
-                  <h2>Real connections, <span>real outcomes.</span></h2>
-                </div>
-                <div className="stories">
-                  {demoStories.map((s) => (
-                    <div key={s.who.name} className={`story card-hover ${s.feature ? 'feature' : ''}`}>
-                      <div className="row-between">
-                        <Quote size={28} color={s.feature ? '#fff' : 'var(--primary)'} style={{ opacity: s.feature ? .6 : 1 }} />
-                        <div className="row" style={{ gap: 2 }}>{[0, 1, 2, 3, 4].map((i) => <Star key={i} size={14} color="#f0a91f" fill="#f0a91f" />)}</div>
-                      </div>
-                      <blockquote>“{s.quote}”</blockquote>
-                      <div className="row"><Avatar p={s.who} /><div><div className="bold small">{s.who.name}</div><div className="xs" style={{ color: s.feature ? '#dbe6ff' : 'var(--muted)' }}>{s.role}</div></div></div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
             {upcoming.length > 0 && (
               <>
-                <div className="row-between wrap" style={{ marginTop: showStories ? 72 : 0, marginBottom: 20 }}>
+                <div className="row-between wrap" style={{ marginBottom: 20 }}>
                   <h3 style={{ fontSize: 26, fontWeight: 800 }}>Upcoming mentorship sessions</h3>
                   <Link to="/register/student" className="link small">Join as a student →</Link>
                 </div>
@@ -470,7 +441,7 @@ export default function Landing() {
             </div>
             <div><h5>Platform</h5><ul><li><a href="#startups">Startups</a></li><li><a href="#features">Mentorship</a></li></ul></div>
             <div><h5>Join as</h5><ul>{Object.entries(ROLES).slice(0, 4).map(([k, r]) => <li key={k}><Link to={`/register/${k}`}>{r.label}</Link></li>)}</ul></div>
-            <div><h5>Aakar</h5><ul><li><a href="#how">Trust &amp; verification</a></li>{showStories && <li><a href="#stories">Success stories</a></li>}<li><Link to="/login">Log in</Link></li></ul></div>
+            <div><h5>Aakar</h5><ul><li><a href="#how">Trust &amp; verification</a></li><li><Link to="/login">Log in</Link></li></ul></div>
           </div>
           <div className="row-between mt-8 xs faint wrap">
             <span>© 2026 Aakar. Built with love from Nepal.</span>

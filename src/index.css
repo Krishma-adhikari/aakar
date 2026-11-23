@@ -376,11 +376,6 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
 .dark-card:hover { transform: translateY(-4px); background: rgba(255,255,255,.07); border-color: rgba(126,165,255,.35); }
 .dark-card .progress { background: rgba(255,255,255,.1); }
 
-.stories { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.story { padding: 28px; border-radius: 24px; background: var(--card); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; }
-.story blockquote { margin: 0; font-size: 16.5px; line-height: 1.6; color: var(--ink-2); font-weight: 500; flex: 1; }
-.story.feature { background: var(--grad); border-color: transparent; color: #fff; box-shadow: 0 24px 48px -24px rgba(33,82,217,.8); }
-.story.feature blockquote { color: #fff; }
 
 .cta-band { border-radius: 36px; background: radial-gradient(600px 300px at 100% 0%, rgba(255,255,255,.18), transparent 60%), var(--grad); color: #fff; padding: 68px; position: relative; overflow: hidden; }
 .cta-band h2 { font-size: clamp(32px, 4vw, 50px); max-width: 640px; color: #fff; font-weight: 800; letter-spacing: -.035em; }
@@ -581,7 +576,6 @@ input[type="checkbox"] { accent-color: var(--primary); width: 16px; height: 16px
   .roles { grid-template-columns: repeat(2, 1fr); }
   .kpis, .kpis.kpis-3 { grid-template-columns: repeat(2, 1fr); }
   .detail-grid { grid-template-columns: 1fr; }
-  .stories { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
   .hero-grid, .auth-wrap { grid-template-columns: 1fr; }
